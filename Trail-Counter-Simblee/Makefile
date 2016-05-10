@@ -21,12 +21,12 @@
 # List application Arduino/chipKIT/Digispark/Energia/Maple/Microduino/Teensy/Wiring libraries here
 # default = 0 = none
 #
-APP_LIBS_LIST = 0
+APP_LIBS_LIST = Wire SimbleeForMobile
 
 # List user's libraries here 
 # default = 0 = none
 #
-USER_LIBS_LIST = 0
+USER_LIBS_LIST = MAX17043 RTClib Adafruit_FRAM_I2C Time
 
 # List local libraries here
 # default = empty = all
@@ -109,7 +109,7 @@ NO_SERIAL_CONSOLE =
 # BOARD_PORT is optional
 # If not defined, BOARD_PORT = /dev/tty.usb* (default)
 #
-#BOARD_PORT = /dev/tty.usbmodem*
+BOARD_PORT = /dev/cu.usbmodem*
 
 # Xcode takes SKETCHBOOK_DIR from preferences.txt
 # If not defined, each IDE has its own SKETCHBOOK_DIR (default)
@@ -120,7 +120,7 @@ NO_SERIAL_CONSOLE =
 # SERIAL_BAUDRATE for the serial console, 9600 by default
 # Uncomment and specify another speed
 #
-#SERIAL_BAUDRATE = 115200
+#SERIAL_BAUDRATE = 9600
 
 
 # Miscellaneous
@@ -139,4 +139,16 @@ MAKEFILE_PATH  = $(CURRENT_DIR)/Makefiles
 UTILITIES_PATH = $(CURRENT_DIR)/Utilities
 
 include $(MAKEFILE_PATH)/Step1.mk
+
+
+
+
+
+
+
+
+
+
+
+
 

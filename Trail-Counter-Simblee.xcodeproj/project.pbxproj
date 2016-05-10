@@ -199,7 +199,7 @@
 		81F8A0741CE16D5600530EC0 /* uploader_izmir.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; name = uploader_izmir.sh; path = Utilities/uploader_izmir.sh; sourceTree = "<group>"; };
 		81F8A0751CE16D5600530EC0 /* uploader_robotis.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = uploader_robotis.py; path = Utilities/uploader_robotis.py; sourceTree = "<group>"; };
 		81F8A0761CE16D5600530EC0 /* uploader_ssh.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; name = uploader_ssh.sh; path = Utilities/uploader_ssh.sh; sourceTree = "<group>"; };
-		81F8A0771CE16D5600530EC0 /* Trail_Counter_Simblee.ino */ = {isa = PBXFileReference; lastKnownFileType = text; path = Trail_Counter_Simblee.ino; sourceTree = "<group>"; };
+		81F8A0771CE16D5600530EC0 /* Trail_Counter_Simblee.ino */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; path = Trail_Counter_Simblee.ino; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -948,6 +948,7 @@
 				81F8A07C1CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A07D1CE16D5600530EC0 /* Build configuration list for PBXLegacyTarget "Build" */ = {
 			isa = XCConfigurationList;
@@ -956,6 +957,7 @@
 				81F8A07F1CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A0801CE16D5600530EC0 /* Build configuration list for PBXLegacyTarget "Document" */ = {
 			isa = XCConfigurationList;
@@ -964,6 +966,7 @@
 				81F8A0821CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A0831CE16D5600530EC0 /* Build configuration list for PBXLegacyTarget "Distribute" */ = {
 			isa = XCConfigurationList;
@@ -972,6 +975,7 @@
 				81F8A0851CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A0861CE16D5600530EC0 /* Build configuration list for PBXLegacyTarget "Boards" */ = {
 			isa = XCConfigurationList;
@@ -980,6 +984,7 @@
 				81F8A0881CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A0891CE16D5600530EC0 /* Build configuration list for PBXLegacyTarget "Serial" */ = {
 			isa = XCConfigurationList;
@@ -988,6 +993,7 @@
 				81F8A08B1CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A08C1CE16D5600530EC0 /* Build configuration list for PBXLegacyTarget "Upload" */ = {
 			isa = XCConfigurationList;
@@ -996,6 +1002,7 @@
 				81F8A08E1CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A08F1CE16D5600530EC0 /* Build configuration list for PBXLegacyTarget "Clean" */ = {
 			isa = XCConfigurationList;
@@ -1004,6 +1011,7 @@
 				81F8A0911CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A0921CE16D5600530EC0 /* Build configuration list for PBXLegacyTarget "Fast" */ = {
 			isa = XCConfigurationList;
@@ -1012,6 +1020,7 @@
 				81F8A0941CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A0951CE16D5600530EC0 /* Build configuration list for PBXLegacyTarget "Make" */ = {
 			isa = XCConfigurationList;
@@ -1020,6 +1029,7 @@
 				81F8A0971CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A0981CE16D5600530EC0 /* Build configuration list for PBXLegacyTarget "Debug" */ = {
 			isa = XCConfigurationList;
@@ -1028,6 +1038,7 @@
 				81F8A09A1CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		81F8A09B1CE16D5600530EC0 /* Build configuration list for PBXNativeTarget "Index" */ = {
 			isa = XCConfigurationList;
@@ -1036,6 +1047,7 @@
 				81F8A09D1CE16D5600530EC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
