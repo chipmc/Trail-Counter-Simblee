@@ -107,7 +107,7 @@
 // Include application, user and local libraries
 #include <Arduino.h>
 #include <Wire.h>
-#include <Time.h>               // This library brings Unix Time capabilities
+#include <TimeLib.h>               // This library brings Unix Time capabilities
 #include "RTClib.h"             // Adafruit's library which includes the DS3231
 #include "MAX17043.h"           // Drives the LiPo Fuel Gauge
 #include "Adafruit_FRAM_I2C.h"   // Note - had to comment out the Wire.begin() in this library

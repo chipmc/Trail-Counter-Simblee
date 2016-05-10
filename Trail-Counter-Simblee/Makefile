@@ -26,7 +26,7 @@ APP_LIBS_LIST = Wire SimbleeForMobile
 # List user's libraries here 
 # default = 0 = none
 #
-USER_LIBS_LIST = MAX17043 RTClib Adafruit_FRAM_I2C Time
+USER_LIBS_LIST = MAX17043 RTClib Adafruit_FRAM_I2C TimeLib
 
 # List local libraries here
 # default = empty = all
@@ -139,6 +139,8 @@ MAKEFILE_PATH  = $(CURRENT_DIR)/Makefiles
 UTILITIES_PATH = $(CURRENT_DIR)/Utilities
 
 include $(MAKEFILE_PATH)/Step1.mk
+
+
 
 
 
