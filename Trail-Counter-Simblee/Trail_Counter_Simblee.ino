@@ -111,8 +111,9 @@
 #include "RTClib.h"             // Adafruit's library which includes the DS3231
 #include "MAX17043.h"           // Drives the LiPo Fuel Gauge
 #include "Adafruit_FRAM_I2C.h"   // Note - had to comment out the Wire.begin() in this library
-#include <SimbleeForMobile.h>
+#include "SimbleeForMobile.h"
 #include <stdlib.h>
+
 
 // Prototypes
 // Prototypes From the included libraries
@@ -209,13 +210,13 @@ void setup()
 {
     Wire.beginOnPins(SCLpin,SDApin);
     Serial.begin(9600);
-    
-    
+
+
     // Unlike Arduino Simblee does not pre-define inputs
     pinMode(TalkPin, INPUT);  // Shared Talk line
     pinMode(The32kPin, INPUT);   // Shared 32kHz line from clock
-    
-    
+
+
     if (fram.begin()) {  // you can stick the new i2c addr in here, e.g. begin(0x51);
         Serial.println("Found I2C FRAM");
     }
@@ -223,14 +224,14 @@ void setup()
         Serial.println("No I2C FRAM found ... check your connections\r\n");
         BlinkForever();
     }
-    
+
     // Check to see if the memory map in the sketch matches the data on the chip
     if (FRAMread8(VERSIONADDR) != VERSIONNUMBER) {
         Serial.print(F("FRAM Version Number: "));
         Serial.println(FRAMread8(VERSIONADDR));
         Serial.read();
         Serial.println(F("Memory/Sketch mismatch! Erase FRAM? (Y/N)"));
-        
+
         while (!Serial.available());
         switch (Serial.read()) {    // Give option to erase and reset memory
             case 'Y':
@@ -244,8 +245,8 @@ void setup()
                 BlinkForever();
         }
     }
-    
-    
+
+
     // Set up the Simblee Mobile App
     SimbleeForMobile.deviceName = "Ulmstead";          // Device name
     SimbleeForMobile.advertisementData = "counts";  // Name of data service
@@ -262,7 +263,7 @@ void loop()
         MemoryMapReport();
         firstTime = 0;
     }
-    
+
 }
 
 void MemoryMapReport()  // Creates a memory map report on start
@@ -302,7 +303,7 @@ void MemoryMapReport()  // Creates a memory map report on start
 }
 
 
-void SimbleeForMobile_onConnect()   // Actions to take once we get connected
+void SimbleeForMobile_onConnect()   // Actions to take once we get connected.
 {
     /*
      * Callback when a Central connects to this device
@@ -329,25 +330,25 @@ void ui()   // The function that defines the iPhone UI
     Serial.print(SimbleeForMobile.screenHeight);
     Serial.print(" / ");
     Serial.println(SimbleeForMobile.screenWidth);
-    
+
     if(SimbleeForMobile.screen == currentScreen) return;
-    
+
     currentScreen = SimbleeForMobile.screen;
     switch(SimbleeForMobile.screen)
     {
         case 1:
             createCurrentScreen();
             break;
-            
+
         case 2:
             createDailyScreen();
             break;
-            
+
         case 3:
             //workingSplash();
             createHourlyScreen();
             break;
-            
+
         default:
             Serial.print("ui: Uknown screen requested: ");
             Serial.println(SimbleeForMobile.screen);
@@ -371,20 +372,20 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         }
         else if (event.type == EVENT_RELEASE) {
         }
-        
+
     }
-    
+
     if(event.id == menuBar) {
         switch(event.value)
         {
             case 0:
                 SimbleeForMobile.showScreen(1);
                 break;
-                
+
             case 1:
                 SimbleeForMobile.showScreen(2);
                 break;
-                
+
             case 2:
                 SimbleeForMobile.showScreen(3);
                 break;
@@ -415,11 +416,11 @@ void createCurrentScreen() // This is the screen that displays current status in
         chargeField =   SimbleeForMobile.drawText(210,200,batteryMonitor.getSoC());
         SimbleeForMobile.drawText(230,200," %");
     }
-    
+
     // we need a momentary button (the default is a push button)
     ui_button = SimbleeForMobile.drawButton(110, 260, 90, "Refresh");
     SimbleeForMobile.setEvents(ui_button, EVENT_PRESS | EVENT_RELEASE);
-    
+
     SimbleeForMobile.endScreen();
 }
 
@@ -430,7 +431,7 @@ void createDailyScreen() // This is the screen that displays current status info
     int rowHeight = 15;
     int columnWidth = 5;
     int row = 1;
-    
+
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
     menuBar = SimbleeForMobile.drawSegment(30, 90, 240, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 1);
@@ -464,7 +465,7 @@ void createHourlyScreen() // This is the screen that displays current status inf
     int columnWidth = 5;
     int row = 1;
     int hoursReported = 24;
-    
+
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
     menuBar = SimbleeForMobile.drawSegment(30, 90, 240, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 2);
@@ -556,7 +557,7 @@ void toArduinoDateTime(unsigned long unixT, int xAxis, int yAxis)   // Converts 
     int columnWidth = 6;
     dateTimePointer = dateTimeArray;
     DateTime timeElement(unixT);
-    
+
     if(timeElement.month() < 10) {
         dateTimeArray[0] = '0';
         dateTimeArray[1] = timeElement.month()+48;  // Stupid but the +48 gives the right ASCII code
@@ -662,9 +663,9 @@ boolean TakeTheBus()
 
 boolean GiveUpTheBus()
 {
-    
+
     pinMode(TalkPin,INPUT);  // Start listening again
     //Serial.println("Simblee gave up the Bus");
-    
+
     return 1;
 }
