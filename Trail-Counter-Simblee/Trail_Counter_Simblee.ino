@@ -106,18 +106,17 @@
 
 // Include application, user and local libraries
 #include <Arduino.h>
-#include <Wire.h>
-#include <TimeLib.h>               // This library brings Unix Time capabilities
-#include "RTClib.h"             // Adafruit's library which includes the DS3231
+#include "Wire.h"
+#include "TimeLib.h"               // This library brings Unix Time capabilities
 #include "MAX17043.h"           // Drives the LiPo Fuel Gauge
 #include "Adafruit_FRAM_I2C.h"   // Note - had to comment out the Wire.begin() in this library
 #include "SimbleeForMobile.h"
 #include <stdlib.h>
+#include <stdio.h>
 
 
 // Prototypes
 // Prototypes From the included libraries
-RTC_DS3231 rtc;                               // Init the DS3231
 MAX17043 batteryMonitor;                      // Init the Fuel Gauge
 Adafruit_FRAM_I2C fram = Adafruit_FRAM_I2C(); // Init the FRAM
 
@@ -138,11 +137,12 @@ void enable32Khz(uint8_t enable);  // Need to turn on the 32k square wave for bu
 
 // Prototypes for General Functions
 void BlinkForever(); // Ends execution
+int sprintf ( char * str, const char * format, ... );
 
 
 // Prototypes for Date and Time Functions
-void toArduinoDateTime(unsigned long unixT, int xAxis, int yAxis);   // Converts to date time for the UI
-void toArduinoHour(unsigned long unixT, int xAxis, int yAxis);  // Just gets the hour
+void toArduinoHour(unsigned long timeElement, int xAxis, int yAxis);  // Just gets the hour
+void toArduinoDateTime(unsigned long unixT); // Puts time in format for reporting
 
 
 
@@ -170,8 +170,8 @@ float stateOfCharge = 0;
 // FRAM and Unix time variables
 unsigned int  framAddr;
 unsigned long unixTime;
-DateTime currentTime;
-DateTime t;
+tmElements_t currentTime;
+tmElements_t t;
 int lastHour = 0;  // For recording the startup values
 int lastDate = 0;
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
@@ -183,8 +183,6 @@ byte currentDailyPeriod;     // We will keep daily counts as well as period coun
 // Variables for Simblee Display
 uint8_t ui_button;
 uint8_t dateTimeField;
-char dateTimeArray[19] = "Test Array";
-char *dateTimePointer;
 uint8_t hourlyField;
 uint8_t dailyField;
 uint8_t chargeField;
@@ -210,7 +208,7 @@ void setup()
 {
     Wire.beginOnPins(SCLpin,SDApin);
     Serial.begin(9600);
-
+    
 
     // Unlike Arduino Simblee does not pre-define inputs
     pinMode(TalkPin, INPUT);  // Shared Talk line
@@ -245,8 +243,7 @@ void setup()
                 BlinkForever();
         }
     }
-
-
+    
     // Set up the Simblee Mobile App
     SimbleeForMobile.deviceName = "Ulmstead";          // Device name
     SimbleeForMobile.advertisementData = "counts";  // Name of data service
@@ -280,9 +277,9 @@ void MemoryMapReport()  // Creates a memory map report on start
     Serial.print("  Current Hourly Count: "); Serial.println(FRAMread16(CURRENTHOURLYCOUNTADDR));
     Serial.print("  Current Daily Count: "); Serial.println(FRAMread16(CURRENTDAILYCOUNTADDR));
     Serial.print("  Current Count Time: "); Serial.println(FRAMread32(CURRENTCOUNTSTIME));
-    Serial.print("  Current Time Converted: "); toArduinoDateTime(FRAMread32(CURRENTCOUNTSTIME), 0, 0);
+    Serial.print("  Current Time Converted: "); toArduinoDateTime(FRAMread32(CURRENTCOUNTSTIME));
     Serial.println(" ");
-    //Serial.print("  Current Time Midnight:  "); toArduinoDateTime(findMidnight(FRAMread32(CURRENTCOUNTSTIME)), 0, 0);
+    //Serial.print("  Current Time Midnight:  "); toArduinoDateTime(findMidnight(FRAMread32(CURRENTCOUNTSTIME)));
     Serial.println(" ");
     Serial.println("The daily count words");
     for (int i=0; i<= numberDays-1; i++ )
@@ -296,7 +293,7 @@ void MemoryMapReport()  // Creates a memory map report on start
     for (int i=0; i<= numberHoursPerDay*numberDays-1; i++ )
     {
         Serial.print("  TimeStamp: "); Serial.print(i+1); Serial.print("  \t");
-        toArduinoDateTime(FRAMread32((HOURLYOFFSET+i)*WORDSIZE),0,0); Serial.print("  \t");
+        toArduinoDateTime(FRAMread32((HOURLYOFFSET+i)*WORDSIZE)); Serial.print("  \t");
         Serial.print("Count: "); Serial.print(FRAMread16((HOURLYOFFSET+i)*WORDSIZE+HOURLYCOUNTOFFSET)); Serial.print("\t");
         Serial.print("Charge: "); Serial.print(FRAMread8((HOURLYOFFSET+i)*WORDSIZE+HOURLYBATTOFFSET)); Serial.println("%");
     }
@@ -360,10 +357,7 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
     if (event.id == ui_button)
     {
         if (event.type == EVENT_PRESS) {
-            //TakeTheBus();
-            //unsigned long unixTime = rtc.now();
-            //GiveUpTheBus();
-            toArduinoDateTime(now(), 50, 140);
+            toArduinoDateTime(FRAMread32(CURRENTCOUNTSTIME));
             SimbleeForMobile.updateValue(hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR));
             SimbleeForMobile.updateValue(dailyField, FRAMread16(CURRENTDAILYCOUNTADDR));
             if (batteryMonitor.getSoC() <= 100) {
@@ -396,14 +390,13 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
 
 void createCurrentScreen() // This is the screen that displays current status information
 {
-    //TakeTheBus();
-    //unsigned long unixTime = rtc.now();
-    //GiveUpTheBus();
+
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
     menuBar = SimbleeForMobile.drawSegment(30, 90, 240, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 0);
     dateTimeField = SimbleeForMobile.drawText(50, 140, " ");
-    toArduinoDateTime(now(), 50, 140);
+    
+    toArduinoDateTime(FRAMread32(CURRENTCOUNTSTIME));
     SimbleeForMobile.drawText(50, 160, "Hourly Count:");
     hourlyField = SimbleeForMobile.drawText(210,160,FRAMread16(CURRENTHOURLYCOUNTADDR));
     SimbleeForMobile.drawText(50, 180, "Daily Count:");
@@ -552,31 +545,34 @@ void ResetFRAM()  // This will reset the FRAM - set the version and preserve del
     fram.write8(VERSIONADDR,VERSIONNUMBER);  // Reset version to match #define value for sketch
 }
 
-void toArduinoDateTime(unsigned long unixT, int xAxis, int yAxis)   // Converts to date time for the UI
+void toArduinoDateTime(unsigned long unixT)   // Converts to date time for the UI
 {
-    int columnWidth = 6;
+    char dateTimeArray[18]="mm/dd/yy hh:mm:ss";
+    char *dateTimePointer;
+    TimeElements timeElement;
+    breakTime(unixT, timeElement);
     dateTimePointer = dateTimeArray;
-    DateTime timeElement(unixT);
 
-    if(timeElement.month() < 10) {
+    if(timeElement.Month < 10) {
         dateTimeArray[0] = '0';
-        dateTimeArray[1] = timeElement.month()+48;  // Stupid but the +48 gives the right ASCII code
+        dateTimeArray[1] = timeElement.Month+48;  // Stupid but the +48 gives the right ASCII code
     }
     else {
-        dateTimeArray[0] = int(timeElement.month()/10)+48;
-        dateTimeArray[1] = (timeElement.month()%10)+48;
+        dateTimeArray[0] = int(timeElement.Month/10);
+        dateTimeArray[1] = (timeElement.Month%10);
     }
     dateTimeArray[2] =  '/';
-    if(timeElement.day() < 10) {
+    if(timeElement.Day < 10) {
         dateTimeArray[3] = '0';
-        dateTimeArray[4] = timeElement.day()+48;  // Stupid but the +48 gives the right ASCII code
+        dateTimeArray[4] = timeElement.Day+48;  // Stupid but the +48 gives the right ASCII code
     }
     else {
-        dateTimeArray[3] = int(timeElement.day()/10)+48;
-        dateTimeArray[4] = (timeElement.day()%10)+48;
+        dateTimeArray[3] = int(timeElement.Day/10)+48;
+        dateTimeArray[4] = (timeElement.Day%10)+48;
     }
     dateTimeArray[5] =  '/';
-    int currentYear = timeElement.year();
+    int currentYear = int(timeElement.Year)-30; // Year is displayed as 2016 not 16
+                   
     if(currentYear < 10) {
         dateTimeArray[6] = '0';
         dateTimeArray[7] = currentYear+48;  // Stupid but the +48 gives the right ASCII code
@@ -586,35 +582,36 @@ void toArduinoDateTime(unsigned long unixT, int xAxis, int yAxis)   // Converts 
         dateTimeArray[7] = (currentYear%10)+48;
     }
     dateTimeArray[8] =  ' ';
-    if(timeElement.hour() < 10) {
+    if(timeElement.Hour < 10) {
         dateTimeArray[9] = '0';
-        dateTimeArray[10] = timeElement.hour()+48;  // Stupid but the +48 gives the right ASCII code
+        dateTimeArray[10] = timeElement.Hour+48;  // Stupid but the +48 gives the right ASCII code
     }
     else {
-        dateTimeArray[9] = int(timeElement.hour()/10)+48;
-        dateTimeArray[10] = (timeElement.hour()%10)+48;
+        dateTimeArray[9] = int(timeElement.Hour/10)+48;
+        dateTimeArray[10] = (timeElement.Hour%10)+48;
     }
     dateTimeArray[11] =  ':';
-    if(timeElement.minute() < 10) {
+    if(timeElement.Minute < 10) {
         dateTimeArray[12] = '0';
-        dateTimeArray[13] = timeElement.minute()+48;  // Stupid but the +48 gives the right ASCII code
+        dateTimeArray[13] = timeElement.Minute+48;  // Stupid but the +48 gives the right ASCII code
     }
     else {
-        dateTimeArray[12] = int(timeElement.minute()/10)+48;
-        dateTimeArray[13] = (timeElement.minute()%10)+48;
+        dateTimeArray[12] = int(timeElement.Minute/10)+48;
+        dateTimeArray[13] = (timeElement.Minute%10)+48;
     }
     dateTimeArray[14] =  ':';
-    if(timeElement.second() < 10) {
+    if(timeElement.Second < 10) {
         dateTimeArray[15] = '0';
-        dateTimeArray[16] = timeElement.second()+48;  // Stupid but the +48 gives the right ASCII code
+        dateTimeArray[16] = timeElement.Second+48;  // Stupid but the +48 gives the right ASCII code
     }
     else {
-        dateTimeArray[15] = int(timeElement.second()/10)+48;
-        dateTimeArray[16] = (timeElement.second()%10)+48;
+        dateTimeArray[15] = int(timeElement.Second/10)+48;
+        dateTimeArray[16] = (timeElement.Second%10)+48;
     }
     Serial.print(dateTimePointer);
     SimbleeForMobile.updateText(dateTimeField, dateTimePointer);
 }
+
 
 
 void toArduinoHour(unsigned long unixT, int xAxis, int yAxis)  // Just gets the hour

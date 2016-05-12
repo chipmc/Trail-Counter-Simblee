@@ -26,7 +26,7 @@ APP_LIBS_LIST = Wire SimbleeForMobile
 # List user's libraries here 
 # default = 0 = none
 #
-USER_LIBS_LIST = MAX17043 RTClib Adafruit_FRAM_I2C TimeLib
+USER_LIBS_LIST = MAX17043 Adafruit_FRAM_I2C TimeLib
 
 # List local libraries here
 # default = empty = all
@@ -66,7 +66,7 @@ WARNING_OPTIONS = 0
 # = 0 or = empty or comment: open serial console
 # = 1: don't open serial console
 #
-NO_SERIAL_CONSOLE =
+NO_SERIAL_CONSOLE = 1
 
 
 # Teensy USB options (default)
@@ -139,6 +139,71 @@ MAKEFILE_PATH  = $(CURRENT_DIR)/Makefiles
 UTILITIES_PATH = $(CURRENT_DIR)/Utilities
 
 include $(MAKEFILE_PATH)/Step1.mk
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
