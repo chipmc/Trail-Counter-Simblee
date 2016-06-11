@@ -618,7 +618,7 @@ BEAGLE_DEBIAN_PATH  = $(BEAGKE_DEBIAN_APP)
 # Variables
 #
 TARGET      := embeddedcomputing
-USER_FLAG   := false
+USER_FLAG   := true
 
 # Builds directory
 #
@@ -875,4 +875,5 @@ EXCLUDE_LIST   = $(addprefix %,$(EXCLUDE_NAMES))
 # Step 2
 #
 include $(MAKEFILE_PATH)/Step2.mk
+
 

@@ -91,6 +91,8 @@
 #define DEBOUNCEADDR 0x2
 #define DAILYPOINTERADDR 0x3
 #define HOURLYPOINTERADDR 0x4
+#define CONTROLREGISTER 0x6     // This is the control register acted on by both Simblee and Arduino
+
 //Second Word - 8 bytes for storing current counts
 #define CURRENTHOURLYCOUNTADDR 0x8
 #define CURRENTDAILYCOUNTADDR 0xA
@@ -125,6 +127,7 @@ Adafruit_FRAM_I2C fram = Adafruit_FRAM_I2C(); // Init the FRAM
 unsigned long FRAMread32(unsigned long address); // Reads a 32 bit word
 int FRAMread16(unsigned int address); // Reads a 16 bit word
 uint8_t FRAMread8(unsigned int address);  // Reads a 8 bit word
+void FRAMwrite8(unsigned int address, uint8_t value);    // Write 8 bits to FRAM
 void FRAMwrite8(unsigned int address, uint8_t value); //Writes a 32-bit word
 void ResetFRAM();  // This will reset the FRAM - set the version and preserve delay and sensitivity
 void MemoryMapReport(); // Creates a memory map report on start
@@ -154,7 +157,8 @@ void ui_event(event_t &event);   // This is where we define the actions to occur
 void createCurrentScreen(); // This is the screen that displays current status information
 void createDailyScreen(); // This is the screen that displays current status information
 void createHourlyScreen(); // This is the screen that displays current status information
-
+void createAdminScreen(); // This is the screen that you use to administer the device
+void printEvent(event_t &event);     // Utility method to print information regarding the given event
 
 // Define variables and constants
 // Pin Value Variables
@@ -181,16 +185,27 @@ byte currentHourlyPeriod;    // This is where we will know if the period changed
 byte currentDailyPeriod;     // We will keep daily counts as well as period counts
 
 // Variables for Simblee Display
-uint8_t ui_button;
+uint8_t ui_RefreshButton;
+uint8_t ui_ReturnButton;
+uint8_t ui_StartStopSwitch;
 uint8_t dateTimeField;
 uint8_t hourlyField;
 uint8_t dailyField;
 uint8_t chargeField;
 uint8_t menuBar;
-char *titles[] = { "Current", "Daily", "Hourly" };
+char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
 uint8_t hourlyTitle;
 uint8_t dailyTitle;
 int currentScreen; // The ID of the current screen being displayed
+
+// Variables for the control byte
+// Control Register  (8 - 4 Reserved, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
+byte signalDelayChange = B0000001;
+byte signalSentitivityChange = B00000010;
+byte toggleStartStop = B0000100;
+byte controlRegisterValue;
+
+
 
 // Map Values
 int numberDays = 10;
@@ -257,7 +272,8 @@ void loop()
     // process must be called in the loop for SimbleeForMobile
     SimbleeForMobile.process();
     if (firstTime) {
-        MemoryMapReport();
+        //MemoryMapReport();
+        Serial.println("Ready to go....");
         firstTime = 0;
     }
 
@@ -345,6 +361,10 @@ void ui()   // The function that defines the iPhone UI
             //workingSplash();
             createHourlyScreen();
             break;
+            
+        case 4:
+            createAdminScreen();
+            break;
 
         default:
             Serial.print("ui: Uknown screen requested: ");
@@ -354,36 +374,55 @@ void ui()   // The function that defines the iPhone UI
 
 void ui_event(event_t &event)   // This is where we define the actions to occur on UI events
 {
-    if (event.id == ui_button)
+    if (event.id == ui_RefreshButton && event.type == EVENT_RELEASE)
     {
-        if (event.type == EVENT_PRESS) {
-            toArduinoDateTime(FRAMread32(CURRENTCOUNTSTIME));
-            SimbleeForMobile.updateValue(hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR));
-            SimbleeForMobile.updateValue(dailyField, FRAMread16(CURRENTDAILYCOUNTADDR));
-            if (batteryMonitor.getSoC() <= 100) {
-                SimbleeForMobile.updateValue(chargeField, batteryMonitor.getSoC());
-            }
+        printEvent(event);
+        toArduinoDateTime(FRAMread32(CURRENTCOUNTSTIME));
+        Serial.println("");
+        SimbleeForMobile.updateValue(hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR));
+        SimbleeForMobile.updateValue(dailyField, FRAMread16(CURRENTDAILYCOUNTADDR));
+        if (batteryMonitor.getSoC() <= 100) {
+            SimbleeForMobile.updateValue(chargeField, batteryMonitor.getSoC());
         }
-        else if (event.type == EVENT_RELEASE) {
-        }
-
     }
-
-    if(event.id == menuBar) {
+    else if (event.id == menuBar)
+    {
+        printEvent(event);
         switch(event.value)
         {
             case 0:
                 SimbleeForMobile.showScreen(1);
                 break;
-
+                
             case 1:
                 SimbleeForMobile.showScreen(2);
                 break;
-
+                
             case 2:
                 SimbleeForMobile.showScreen(3);
                 break;
+                
+            case 3:
+                SimbleeForMobile.showScreen(4);
+                break;
         }
+    }
+    else if (event.id == ui_StartStopSwitch && event.type == EVENT_RELEASE)
+    {
+        printEvent(event);
+        Serial.print("Slide Switch Value: ");
+        Serial.println(event.value);
+        FRAMwrite8(CONTROLREGISTER,toggleStartStop ^ controlRegisterValue);
+        controlRegisterValue = FRAMread8(CONTROLREGISTER);
+        Serial.print("The value of the control register is:");
+        Serial.println(controlRegisterValue);
+        Serial.print("The start / stop bit is: ");
+        Serial.println(controlRegisterValue & toggleStartStop);
+    }
+    else
+    {
+        Serial.print("Could not find event id:");
+        Serial.println(event.id);
     }
 }
 
@@ -392,11 +431,12 @@ void createCurrentScreen() // This is the screen that displays current status in
 {
 
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(30, 90, 240, titles, countof(titles));
+    menuBar = SimbleeForMobile.drawSegment(10, 90, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 0);
+
     dateTimeField = SimbleeForMobile.drawText(50, 140, " ");
-    
     toArduinoDateTime(FRAMread32(CURRENTCOUNTSTIME));
+    Serial.println("");
     SimbleeForMobile.drawText(50, 160, "Hourly Count:");
     hourlyField = SimbleeForMobile.drawText(210,160,FRAMread16(CURRENTHOURLYCOUNTADDR));
     SimbleeForMobile.drawText(50, 180, "Daily Count:");
@@ -411,8 +451,9 @@ void createCurrentScreen() // This is the screen that displays current status in
     }
 
     // we need a momentary button (the default is a push button)
-    ui_button = SimbleeForMobile.drawButton(110, 260, 90, "Refresh");
-    SimbleeForMobile.setEvents(ui_button, EVENT_PRESS | EVENT_RELEASE);
+    ui_RefreshButton = SimbleeForMobile.drawButton(110, 260, 90, "Refresh");
+    SimbleeForMobile.setEvents(ui_RefreshButton, EVENT_RELEASE);
+    
 
     SimbleeForMobile.endScreen();
 }
@@ -426,8 +467,9 @@ void createDailyScreen() // This is the screen that displays current status info
     int row = 1;
 
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(30, 90, 240, titles, countof(titles));
+    menuBar = SimbleeForMobile.drawSegment(10, 90, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 1);
+    
     SimbleeForMobile.drawText(100, 120, "Daily Screen");
     SimbleeForMobile.drawText(xAxis, yAxis,"Date");
     SimbleeForMobile.drawText(xAxis+21*columnWidth, yAxis,"Count");
@@ -460,8 +502,9 @@ void createHourlyScreen() // This is the screen that displays current status inf
     int hoursReported = 24;
 
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(30, 90, 240, titles, countof(titles));
+    menuBar = SimbleeForMobile.drawSegment(10, 90, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 2);
+    
     SimbleeForMobile.drawText(100, 120, "Hourly Screen");
     SimbleeForMobile.drawText(xAxis, yAxis,"Date");
     SimbleeForMobile.drawText(xAxis+26*columnWidth, yAxis,"Count");
@@ -485,6 +528,55 @@ void createHourlyScreen() // This is the screen that displays current status inf
     SimbleeForMobile.endScreen();
 }
 
+void createAdminScreen() // This is the screen that displays current status information
+{
+    SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
+    menuBar = SimbleeForMobile.drawSegment(10, 90, 280, titles, countof(titles));
+    SimbleeForMobile.updateValue(menuBar, 3);
+
+    
+    // The first control will be a switch
+    controlRegisterValue = FRAMread8(CONTROLREGISTER);
+
+
+    ui_StartStopSwitch = SimbleeForMobile.drawButton(80,150,150, "Start/Stop");
+    SimbleeForMobile.setEvents(ui_StartStopSwitch, EVENT_RELEASE);
+
+    
+    
+    SimbleeForMobile.endScreen();
+    
+}
+
+void printEvent(event_t &event)     // Utility method to print information regarding the given event
+{
+    Serial.println("  Screen:");
+    Serial.print("   Screen Value:");
+    Serial.println(SimbleeForMobile.screen);
+    Serial.print("   currentScreen = ");
+    Serial.println(currentScreen);
+                 
+    
+    Serial.println("  Event:");
+    Serial.print("   ID: ");
+    Serial.println(event.id);
+    
+    Serial.print("    Type: ");
+    Serial.println(event.type);
+    
+    Serial.print("    Value: ");
+    Serial.println(event.value);
+    
+    Serial.print("    Text: ");
+    Serial.println(event.text);
+    
+    Serial.print("    Coords: ");
+    Serial.print(event.x);
+    Serial.print(",");
+    Serial.println(event.y);  
+}
+
+
 uint8_t FRAMread8(unsigned int address)
 {
     uint8_t result;
@@ -496,6 +588,17 @@ uint8_t FRAMread8(unsigned int address)
     GiveUpTheBus();       // Release exclusive access to the bus
     return result;
 }
+                       
+void FRAMwrite8(unsigned int address, uint8_t value)    // Write 8 bits to FRAM
+{
+    if (TakeTheBus()) {  // Request exclusive access to the bus
+        fram.write8(address,value);
+    }
+    GiveUpTheBus();// Release exclusive access to the bus
+}
+                       
+                       
+                       
 
 int FRAMread16(unsigned int address)
 {

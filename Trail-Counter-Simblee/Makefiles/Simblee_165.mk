@@ -8,7 +8,7 @@
 # All rights reserved
 #
 #
-# Last update: Feb 29, 2016 release 4.3.7
+# Last update: May 10, 2016 release 4.5.5
 
 
 
@@ -24,7 +24,8 @@ PLATFORM_VERSION := $(SIMBLEE_RELEASE) for Arduino $(ARDUINO_CC_RELEASE)
 
 HARDWARE_PATH     = $(APPLICATION_PATH)/hardware/Simblee/$(SIMBLEE_RELEASE)
 TOOL_CHAIN_PATH   = $(APPLICATION_PATH)/tools/arm-none-eabi-gcc/4.8.3-2014q1
-OTHER_TOOLS_PATH  = $(APPLICATION_PATH)/tools/RFDLoader/1.5
+#OTHER_TOOLS_PATH  = $(APPLICATION_PATH)/tools/RFDLoader/1.5
+OTHER_TOOLS_PATH  = $(APPLICATION_PATH)/hardware/Simblee/$(SIMBLEE_RELEASE)
 
 UPLOADER          = RFDLoader
 UPLOADER_PATH     = $(OTHER_TOOLS_PATH)
