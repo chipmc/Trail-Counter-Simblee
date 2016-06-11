@@ -188,6 +188,7 @@ byte currentDailyPeriod;     // We will keep daily counts as well as period coun
 uint8_t ui_RefreshButton;
 uint8_t ui_ReturnButton;
 uint8_t ui_StartStopSwitch;
+uint8_t ui_StartStopStatus;
 uint8_t dateTimeField;
 uint8_t hourlyField;
 uint8_t dailyField;
@@ -202,7 +203,7 @@ int currentScreen; // The ID of the current screen being displayed
 // Control Register  (8 - 4 Reserved, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
 byte signalDelayChange = B0000001;
 byte signalSentitivityChange = B00000010;
-byte toggleStartStop = B0000100;
+byte toggleStartStop = B00000100;
 byte controlRegisterValue;
 
 
@@ -351,6 +352,10 @@ void ui()   // The function that defines the iPhone UI
     {
         case 1:
             createCurrentScreen();
+            if ((controlRegisterValue & toggleStartStop) >> 2) {
+                SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
+            }
+            else SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
             break;
 
         case 2:
@@ -364,6 +369,10 @@ void ui()   // The function that defines the iPhone UI
             
         case 4:
             createAdminScreen();
+            if ((controlRegisterValue & toggleStartStop) >> 2) {
+                SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
+            }
+            else SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
             break;
 
         default:
@@ -410,14 +419,13 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
     else if (event.id == ui_StartStopSwitch && event.type == EVENT_RELEASE)
     {
         printEvent(event);
-        Serial.print("Slide Switch Value: ");
-        Serial.println(event.value);
         FRAMwrite8(CONTROLREGISTER,toggleStartStop ^ controlRegisterValue);
         controlRegisterValue = FRAMread8(CONTROLREGISTER);
-        Serial.print("The value of the control register is:");
-        Serial.println(controlRegisterValue);
-        Serial.print("The start / stop bit is: ");
-        Serial.println(controlRegisterValue & toggleStartStop);
+        Serial.println((controlRegisterValue & toggleStartStop) >> 2);
+        if ((controlRegisterValue & toggleStartStop) >> 2) {
+            SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
+        }
+        else SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
     }
     else
     {
@@ -449,6 +457,10 @@ void createCurrentScreen() // This is the screen that displays current status in
         chargeField =   SimbleeForMobile.drawText(210,200,batteryMonitor.getSoC());
         SimbleeForMobile.drawText(230,200," %");
     }
+    controlRegisterValue = FRAMread8(CONTROLREGISTER);
+    SimbleeForMobile.drawText(50, 220, "Counter Status:");
+    ui_StartStopStatus = SimbleeForMobile.drawText(210, 220, " ");
+
 
     // we need a momentary button (the default is a push button)
     ui_RefreshButton = SimbleeForMobile.drawButton(110, 260, 90, "Refresh");
@@ -538,8 +550,9 @@ void createAdminScreen() // This is the screen that displays current status info
     // The first control will be a switch
     controlRegisterValue = FRAMread8(CONTROLREGISTER);
 
+    ui_StartStopStatus = SimbleeForMobile.drawText(200, 160, " ");
 
-    ui_StartStopSwitch = SimbleeForMobile.drawButton(80,150,150, "Start/Stop");
+    ui_StartStopSwitch = SimbleeForMobile.drawButton(20,150,150, "Start/Stop");
     SimbleeForMobile.setEvents(ui_StartStopSwitch, EVENT_RELEASE);
 
     
