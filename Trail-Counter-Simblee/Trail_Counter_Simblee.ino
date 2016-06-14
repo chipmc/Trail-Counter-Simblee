@@ -78,7 +78,7 @@
 #define DAILYPERIOD t.day() // Normally t.date but can use t.min or t.hour for debugging
 
 //These defines let me change the memory map without hunting through the whole program
-#define VERSIONNUMBER 4       // Increment this number each time the memory map is changed
+#define VERSIONNUMBER 5       // Increment this number each time the memory map is changed
 #define WORDSIZE 8            // For the Word size
 #define PAGESIZE 4096         // Memory size in bytes / word size - 256kb FRAM
 // First Word - 8 bytes for setting global values
@@ -88,10 +88,10 @@
 #define HOURLYCOUNTNUMBER 4078 // used in modulo calculations - sets the # of hours stored - 256k (4096-14-2)
 #define VERSIONADDR 0x0       // Memory Locations By Name not Number
 #define SENSITIVITYADDR 0x1   // For the 1st Word locations
-#define DEBOUNCEADDR 0x2
-#define DAILYPOINTERADDR 0x3
-#define HOURLYPOINTERADDR 0x4
-#define CONTROLREGISTER 0x6     // This is the control register acted on by both Simblee and Arduino
+#define DEBOUNCEADDR 0x2        // Two bytes for debounce
+#define DAILYPOINTERADDR 0x4
+#define HOURLYPOINTERADDR 0x5   // Two bytes for hourly pointer
+#define CONTROLREGISTER 0x7     // This is the control register acted on by both Simblee and Arduino
 
 //Second Word - 8 bytes for storing current counts
 #define CURRENTHOURLYCOUNTADDR 0x8
@@ -110,6 +110,7 @@
 #include <Arduino.h>
 #include "Wire.h"
 #include "TimeLib.h"               // This library brings Unix Time capabilities
+#include "RTClib.h"
 #include "MAX17043.h"           // Drives the LiPo Fuel Gauge
 #include "Adafruit_FRAM_I2C.h"   // Note - had to comment out the Wire.begin() in this library
 #include "SimbleeForMobile.h"
@@ -121,11 +122,15 @@
 // Prototypes From the included libraries
 MAX17043 batteryMonitor;                      // Init the Fuel Gauge
 Adafruit_FRAM_I2C fram = Adafruit_FRAM_I2C(); // Init the FRAM
+RTC_DS3231 rtc;                               // Init the DS3231
+
 
 // Prototypes From my functions
 // Prototypes for FRAM Functions
 unsigned long FRAMread32(unsigned long address); // Reads a 32 bit word
+void FRAMwrite32(int address, unsigned long value);  // Write 32 bits to FRAM
 int FRAMread16(unsigned int address); // Reads a 16 bit word
+void FRAMwrite16(unsigned int address, int value);   // Write 16 bits to FRAM
 uint8_t FRAMread8(unsigned int address);  // Reads a 8 bit word
 void FRAMwrite8(unsigned int address, uint8_t value);    // Write 8 bits to FRAM
 void FRAMwrite8(unsigned int address, uint8_t value); //Writes a 32-bit word
@@ -146,6 +151,7 @@ int sprintf ( char * str, const char * format, ... );
 // Prototypes for Date and Time Functions
 void toArduinoHour(unsigned long timeElement, int xAxis, int yAxis);  // Just gets the hour
 void toArduinoDateTime(unsigned long unixT); // Puts time in format for reporting
+unsigned long toUnixTime(DateTime ut);  // For efficiently storing time in memory
 
 
 
@@ -183,12 +189,17 @@ unsigned int hourlyPersonCount = 0;  // hourly counter
 unsigned int dailyPersonCount = 0;   //  daily counter
 byte currentHourlyPeriod;    // This is where we will know if the period changed
 byte currentDailyPeriod;     // We will keep daily counts as well as period counts
+int setYear,setMonth,setDay,setHour,setMinute,setSecond;
+
 
 // Variables for Simblee Display
 uint8_t ui_RefreshButton;
 uint8_t ui_ReturnButton;
 uint8_t ui_StartStopSwitch;
 uint8_t ui_StartStopStatus;
+uint8_t ui_DebounceSlider;
+uint8_t ui_SensitivitySlider;
+uint8_t ui_UpdateButton;
 uint8_t dateTimeField;
 uint8_t hourlyField;
 uint8_t dailyField;
@@ -198,14 +209,20 @@ char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
 uint8_t hourlyTitle;
 uint8_t dailyTitle;
 int currentScreen; // The ID of the current screen being displayed
+uint8_t ui_setYear, ui_setMonth,ui_setDay,ui_setHour,ui_setMinute,ui_setSecond;
+
+// Accelerometer Values
+int debounce;               // This is a minimum debounce value - additional debounce set using pot or remote terminal
+int accelInputValue;            // Raw sensitivity input (0-9);
+byte accelSensitivity;               // Hex variable for sensitivity
 
 // Variables for the control byte
 // Control Register  (8 - 4 Reserved, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
-byte signalDelayChange = B0000001;
+byte signalDebounceChange = B0000001;
 byte signalSentitivityChange = B00000010;
 byte toggleStartStop = B00000100;
+byte signalTimeChange = B00001000;
 byte controlRegisterValue;
-
 
 
 // Map Values
@@ -286,7 +303,7 @@ void MemoryMapReport()  // Creates a memory map report on start
     Serial.println("The first word - System Settings");
     Serial.print("  Version number: "); Serial.println(FRAMread8(VERSIONADDR));
     Serial.print("  Sensitivity: "); Serial.println(FRAMread8(SENSITIVITYADDR));
-    Serial.print("  Debounce: "); Serial.println(FRAMread8(DEBOUNCEADDR));
+    Serial.print("  Debounce: "); Serial.println(FRAMread16(DEBOUNCEADDR));
     Serial.print("  Daily Pointer: "); Serial.println(FRAMread8(DAILYPOINTERADDR));
     Serial.print("  Hourly Pointer: "); Serial.println(FRAMread16(HOURLYPOINTERADDR));
     Serial.println(" ");
@@ -352,6 +369,8 @@ void ui()   // The function that defines the iPhone UI
     {
         case 1:
             createCurrentScreen();
+            SimbleeForMobile.updateValue(hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR));
+            SimbleeForMobile.updateValue(dailyField, FRAMread16(CURRENTDAILYCOUNTADDR));
             if ((controlRegisterValue & toggleStartStop) >> 2) {
                 SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
             }
@@ -363,7 +382,6 @@ void ui()   // The function that defines the iPhone UI
             break;
 
         case 3:
-            //workingSplash();
             createHourlyScreen();
             break;
             
@@ -373,8 +391,13 @@ void ui()   // The function that defines the iPhone UI
                 SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
             }
             else SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
+            debounce = FRAMread16(DEBOUNCEADDR);
+            SimbleeForMobile.updateValue(ui_DebounceSlider, debounce);
+            accelInputValue = map(FRAMread8(SENSITIVITYADDR),0,64,0,10);
+            SimbleeForMobile.updateValue(ui_SensitivitySlider, accelInputValue);
+            
             break;
-
+            
         default:
             Serial.print("ui: Uknown screen requested: ");
             Serial.println(SimbleeForMobile.screen);
@@ -427,6 +450,35 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         }
         else SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
     }
+    else if (event.id == ui_DebounceSlider)
+    {
+        debounce = event.value;
+        Serial.print("debounce value =");
+        Serial.println(debounce);
+    }
+    else if (event.id == ui_SensitivitySlider)
+    {
+        accelInputValue = event.value;
+        Serial.print("sensitivty value =");
+        Serial.println(accelInputValue);
+    }
+    else if (event.id == ui_UpdateButton && EVENT_RELEASE)
+    {
+        Serial.println("Updated Values");
+        FRAMwrite16(DEBOUNCEADDR, debounce);
+        FRAMwrite8(CONTROLREGISTER,signalDebounceChange | controlRegisterValue);
+        accelSensitivity = map(accelInputValue,0,10,0,64);
+        FRAMwrite8(SENSITIVITYADDR, accelSensitivity);
+        FRAMwrite8(CONTROLREGISTER,signalSentitivityChange | controlRegisterValue);
+        DateTime t = DateTime(setYear,setMonth,setDay,setHour,setMinute,setSecond); // Convert to Unit Timx
+        unsigned long unixTime = toUnixTime(t);  // Convert to UNIX Time
+        FRAMwrite32(CURRENTCOUNTSTIME, unixTime);   // Write to FRAM - this is so we know when the last counts were saved
+        FRAMwrite8(CONTROLREGISTER,signalTimeChange | controlRegisterValue);
+        controlRegisterValue = FRAMread8(CONTROLREGISTER);
+        Serial.print("Control Register Value =");
+        Serial.println(controlRegisterValue);
+
+    }
     else
     {
         Serial.print("Could not find event id:");
@@ -446,9 +498,9 @@ void createCurrentScreen() // This is the screen that displays current status in
     toArduinoDateTime(FRAMread32(CURRENTCOUNTSTIME));
     Serial.println("");
     SimbleeForMobile.drawText(50, 160, "Hourly Count:");
-    hourlyField = SimbleeForMobile.drawText(210,160,FRAMread16(CURRENTHOURLYCOUNTADDR));
+    hourlyField = SimbleeForMobile.drawText(210,160," ");
     SimbleeForMobile.drawText(50, 180, "Daily Count:");
-    dailyField =   SimbleeForMobile.drawText(210,180,FRAMread16(CURRENTDAILYCOUNTADDR));
+    dailyField =   SimbleeForMobile.drawText(210,180," ");
     SimbleeForMobile.drawText(50, 200, "State of Charge:");
     if (batteryMonitor.getSoC() >= 105) {
         chargeField =   SimbleeForMobile.drawText(210,200,"Error");
@@ -554,8 +606,25 @@ void createAdminScreen() // This is the screen that displays current status info
 
     ui_StartStopSwitch = SimbleeForMobile.drawButton(20,150,150, "Start/Stop");
     SimbleeForMobile.setEvents(ui_StartStopSwitch, EVENT_RELEASE);
-
     
+    SimbleeForMobile.drawText(20,220,"0ms          Debounce        1000ms");
+    ui_DebounceSlider = SimbleeForMobile.drawSlider(20,240,270,0,1000);
+ 
+    SimbleeForMobile.drawText(20,280,"Min           Sensitivity         Max");
+    ui_SensitivitySlider = SimbleeForMobile.drawSlider(20,300,270,0,10);
+
+    SimbleeForMobile.drawText(20,340,"Set Date");
+    ui_setYear = SimbleeForMobile.drawTextField(20,360,60,setYear,"year");
+    ui_setMonth = SimbleeForMobile.drawTextField(100,360,60,setMonth,"mon");
+    ui_setDay = SimbleeForMobile.drawTextField(180,360,60,setDay,"day");
+
+    SimbleeForMobile.drawText(20,400,"Set Time");
+    ui_setHour = SimbleeForMobile.drawTextField(20,420,60,setHour,"hr");
+    ui_setMinute = SimbleeForMobile.drawTextField(100,420,60,setMinute,"min");
+    ui_setSecond = SimbleeForMobile.drawTextField(180,420,60,setSecond,"sec");
+    
+    ui_UpdateButton = SimbleeForMobile.drawButton(90,500,150, "Update");
+    SimbleeForMobile.setEvents(ui_UpdateButton, EVENT_RELEASE);
     
     SimbleeForMobile.endScreen();
     
@@ -609,9 +678,6 @@ void FRAMwrite8(unsigned int address, uint8_t value)    // Write 8 bits to FRAM
     }
     GiveUpTheBus();// Release exclusive access to the bus
 }
-                       
-                       
-                       
 
 int FRAMread16(unsigned int address)
 {
@@ -625,6 +691,23 @@ int FRAMread16(unsigned int address)
     GiveUpTheBus();// Release exclusive access to the bus
     //Return the recomposed long by using bitshift.
     return ((two << 0) & 0xFF) + ((one << 8) & 0xFFFF);
+}
+
+void FRAMwrite16(unsigned int address, int value)   // Write 16 bits to FRAM
+{
+    //This function will write a 2 byte (16bit) long to the eeprom at
+    //the specified address to address + 1.
+    //Decomposition from a long to 2 bytes by using bitshift.
+    //One = Most significant -> Four = Least significant byte
+    byte two = (value & 0xFF);
+    byte one = ((value >> 8) & 0xFF);
+    
+    //Write the 2 bytes into the eeprom memory.
+    if (TakeTheBus()) {  // Request exclusive access to the bus
+        fram.write8(address, two);
+        fram.write8(address + 1, one);
+    }
+    GiveUpTheBus();// Release exclusive access to the bus
 }
 
 unsigned long FRAMread32(unsigned long address)
@@ -645,20 +728,42 @@ unsigned long FRAMread32(unsigned long address)
     return ((four << 0) & 0xFF) + ((three << 8) & 0xFFFF) + ((two << 16) & 0xFFFFFF) + ((one << 24) & 0xFFFFFFFF);
 }
 
+void FRAMwrite32(int address, unsigned long value)  // Write 32 bits to FRAM
+{
+    //This function will write a 4 byte (32bit) long to the eeprom at
+    //the specified address to address + 3.
+    //Decomposition from a long to 4 bytes by using bitshift.
+    //One = Most significant -> Four = Least significant byte
+    
+    byte four = (value & 0xFF);
+    byte three = ((value >> 8) & 0xFF);
+    byte two = ((value >> 16) & 0xFF);
+    byte one = ((value >> 24) & 0xFF);
+    
+    //Write the 4 bytes into the eeprom memory.
+    if (TakeTheBus()) {  // Request exclusive access to the bus
+        fram.write8(address, four);
+        fram.write8(address + 1, three);
+        fram.write8(address + 2, two);
+        fram.write8(address + 3, one);
+    }
+    GiveUpTheBus();// Release exclusive access to the bus
+}
 
-// Note - have to hard code the size here due to this issue - http://www.microchip.com/forums/m501193.aspx
+
 void ResetFRAM()  // This will reset the FRAM - set the version and preserve delay and sensitivity
 {
+    // Note - have to hard code the size here due to this issue - http://www.microchip.com/forums/m501193.aspx
     Serial.println("Resetting Memory");
     for (unsigned long i=3; i < 32768; i++) {  // Start at 3 to not overwrite debounce and sensitivity
-        fram.write8(i,0x0);
+        FRAMwrite8(i,0x0);
         //Serial.println(i);
         if (i==8192) Serial.println(F("25% done"));
         if (i==16384) Serial.println(F("50% done"));
         if (i==(24576)) Serial.println(F("75% done"));
         if (i==32767) Serial.println(F("Done"));
     }
-    fram.write8(VERSIONADDR,VERSIONNUMBER);  // Reset version to match #define value for sketch
+    FRAMwrite8(VERSIONADDR,VERSIONNUMBER);  // Reset version to match #define value for sketch
 }
 
 void toArduinoDateTime(unsigned long unixT)   // Converts to date time for the UI
@@ -728,8 +833,6 @@ void toArduinoDateTime(unsigned long unixT)   // Converts to date time for the U
     SimbleeForMobile.updateText(dateTimeField, dateTimePointer);
 }
 
-
-
 void toArduinoHour(unsigned long unixT, int xAxis, int yAxis)  // Just gets the hour
 {
     tmElements_t timeElement;
@@ -750,6 +853,18 @@ void toArduinoHour(unsigned long unixT, int xAxis, int yAxis)  // Just gets the 
     SimbleeForMobile.drawText(xAxis+8*columnWidth, yAxis,timeElement.Hour);
     SimbleeForMobile.drawText(xAxis+11*columnWidth, yAxis,":");
     SimbleeForMobile.drawText(xAxis+12*columnWidth, yAxis,"00 ");
+}
+
+unsigned long toUnixTime(DateTime ut)   // For efficiently storing time in memory
+{
+    TimeElements timeElement;
+    timeElement.Month = ut.month();
+    timeElement.Day = ut.day();
+    timeElement.Year = (ut.year()-1970);
+    timeElement.Hour = ut.hour();
+    timeElement.Minute = ut.minute();
+    timeElement.Second = ut.second();
+    return makeTime(timeElement);
 }
 
 void BlinkForever()
