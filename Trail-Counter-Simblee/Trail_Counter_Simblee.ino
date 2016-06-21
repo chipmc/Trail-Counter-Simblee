@@ -152,6 +152,8 @@ int sprintf ( char * str, const char * format, ... );
 void toArduinoHour(unsigned long timeElement, int xAxis, int yAxis);  // Just gets the hour
 void toArduinoDateTime(unsigned long unixT); // Puts time in format for reporting
 unsigned long toUnixTime(DateTime ut);  // For efficiently storing time in memory
+void toDateTimeValues(unsigned long unixT);   // Converts to date time for the Values on the Settings Tab
+
 
 
 
@@ -242,7 +244,6 @@ void setup()
     Wire.beginOnPins(SCLpin,SDApin);
     Serial.begin(9600);
     
-
     // Unlike Arduino Simblee does not pre-define inputs
     pinMode(TalkPin, INPUT);  // Shared Talk line
     pinMode(The32kPin, INPUT);   // Shared 32kHz line from clock
@@ -276,6 +277,10 @@ void setup()
                 BlinkForever();
         }
     }
+    
+    
+    // Reset the control values
+    FRAMwrite8(CONTROLREGISTER, 0x0);
     
     // Set up the Simblee Mobile App
     SimbleeForMobile.deviceName = "Ulmstead";          // Device name
@@ -395,6 +400,7 @@ void ui()   // The function that defines the iPhone UI
             SimbleeForMobile.updateValue(ui_DebounceSlider, debounce);
             accelInputValue = map(FRAMread8(SENSITIVITYADDR),0,64,0,10);
             SimbleeForMobile.updateValue(ui_SensitivitySlider, accelInputValue);
+            toDateTimeValues(FRAMread32(CURRENTCOUNTSTIME));
             
             break;
             
@@ -462,26 +468,36 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         Serial.print("sensitivty value =");
         Serial.println(accelInputValue);
     }
-    else if (event.id == ui_UpdateButton && EVENT_RELEASE)
+    else if (event.id == ui_UpdateButton && event.type == EVENT_RELEASE)
     {
-        Serial.println("Updated Values");
-        FRAMwrite16(DEBOUNCEADDR, debounce);
-        FRAMwrite8(CONTROLREGISTER,signalDebounceChange | controlRegisterValue);
         accelSensitivity = map(accelInputValue,0,10,0,64);
-        FRAMwrite8(SENSITIVITYADDR, accelSensitivity);
-        FRAMwrite8(CONTROLREGISTER,signalSentitivityChange | controlRegisterValue);
         DateTime t = DateTime(setYear,setMonth,setDay,setHour,setMinute,setSecond); // Convert to Unit Timx
         unsigned long unixTime = toUnixTime(t);  // Convert to UNIX Time
-        FRAMwrite32(CURRENTCOUNTSTIME, unixTime);   // Write to FRAM - this is so we know when the last counts were saved
-        FRAMwrite8(CONTROLREGISTER,signalTimeChange | controlRegisterValue);
+        if (FRAMread16(DEBOUNCEADDR) != debounce)
+        {
+            FRAMwrite16(DEBOUNCEADDR, debounce);
+            FRAMwrite8(CONTROLREGISTER,signalDebounceChange |= controlRegisterValue);
+            Serial.println("Updating debounce");
+        }
+        else if (FRAMread8(SENSITIVITYADDR)!=accelSensitivity)
+        {
+            FRAMwrite8(SENSITIVITYADDR, accelSensitivity);
+            FRAMwrite8(CONTROLREGISTER,signalSentitivityChange |= controlRegisterValue);
+            Serial.println("Updating sensitivity");
+        }
+        else if (FRAMread32(CURRENTCOUNTSTIME) != unixTime)
+        {
+            FRAMwrite32(CURRENTCOUNTSTIME, unixTime);   // Write to FRAM - this is so we know when the last counts were saved
+            FRAMwrite8(CONTROLREGISTER,signalTimeChange |= controlRegisterValue);
+            Serial.println("Updating time");
+        }
         controlRegisterValue = FRAMread8(CONTROLREGISTER);
         Serial.print("Control Register Value =");
         Serial.println(controlRegisterValue);
-
     }
     else
     {
-        Serial.print("Could not find event id:");
+        Serial.print("Cound not find event.id = ");
         Serial.println(event.id);
     }
 }
@@ -610,7 +626,7 @@ void createAdminScreen() // This is the screen that displays current status info
     SimbleeForMobile.drawText(20,220,"0ms          Debounce        1000ms");
     ui_DebounceSlider = SimbleeForMobile.drawSlider(20,240,270,0,1000);
  
-    SimbleeForMobile.drawText(20,280,"Min           Sensitivity         Max");
+    SimbleeForMobile.drawText(20,280,"Max           Sensitivity         Min");
     ui_SensitivitySlider = SimbleeForMobile.drawSlider(20,300,270,0,10);
 
     SimbleeForMobile.drawText(20,340,"Set Date");
@@ -765,6 +781,28 @@ void ResetFRAM()  // This will reset the FRAM - set the version and preserve del
     }
     FRAMwrite8(VERSIONADDR,VERSIONNUMBER);  // Reset version to match #define value for sketch
 }
+
+void toDateTimeValues(unsigned long unixT)   // Converts to date time for the Values on the Settings Tab
+{
+    TimeElements timeElement;
+    breakTime(unixT, timeElement);
+    
+    //setYear = timeElement.Year;
+    //setMonth = timeElement.Month;
+    //setDay = timeElement.Day;
+    //setHour = timeElement.Hour;
+    //setMinute = timeElement.Minute;
+    //setSecond = timeElement.Second;
+
+    SimbleeForMobile.updateValue(ui_setYear, int(timeElement.Year)-30);
+    SimbleeForMobile.updateValue(ui_setMonth, int(timeElement.Month));
+    SimbleeForMobile.updateValue(ui_setDay, int(timeElement.Day));
+    SimbleeForMobile.updateValue(ui_setHour, int(timeElement.Hour));
+    SimbleeForMobile.updateValue(ui_setMinute, int(timeElement.Minute));
+    SimbleeForMobile.updateValue(ui_setSecond, int(timeElement.Second));
+    
+}
+
 
 void toArduinoDateTime(unsigned long unixT)   // Converts to date time for the UI
 {
