@@ -105,7 +105,6 @@
 #define HOURLYBATTOFFSET 6
 
 
-
 // Include application, user and local libraries
 #include <Arduino.h>
 #include "Wire.h"
@@ -135,7 +134,6 @@ uint8_t FRAMread8(unsigned int address);  // Reads a 8 bit word
 void FRAMwrite8(unsigned int address, uint8_t value);    // Write 8 bits to FRAM
 void FRAMwrite8(unsigned int address, uint8_t value); //Writes a 32-bit word
 void ResetFRAM();  // This will reset the FRAM - set the version and preserve delay and sensitivity
-void MemoryMapReport(); // Creates a memory map report on start
 
 // Prototypes for i2c functions
 boolean GiveUpTheBus(); // Give up the i2c bus
@@ -144,8 +142,9 @@ void enable32Khz(uint8_t enable);  // Need to turn on the 32k square wave for bu
 
 
 // Prototypes for General Functions
-void BlinkForever(); // Ends execution
+void BlinkForever(); // Ends execution if there is an error
 int sprintf ( char * str, const char * format, ... );
+void NonBlockingDelay(int millisDelay);  // Used for a non-blocking delay
 
 
 // Prototypes for Date and Time Functions
@@ -153,8 +152,6 @@ void toArduinoHour(unsigned long timeElement, int xAxis, int yAxis);  // Just ge
 void toArduinoDateTime(unsigned long unixT); // Puts time in format for reporting
 unsigned long toUnixTime(DateTime ut);  // For efficiently storing time in memory
 void toDateTimeValues(unsigned long unixT);   // Converts to date time for the Values on the Settings Tab
-
-
 
 
 // Prototypes for the Simblee
@@ -170,48 +167,49 @@ void printEvent(event_t &event);     // Utility method to print information rega
 
 // Define variables and constants
 // Pin Value Variables
-int SCLpin = 13;
-int SDApin = 14;
+int SCLpin = 13;    // Simblee i2c Clock pin
+int SDApin = 14;    // Simblee i2c Data pin
 int TalkPin = 23;  // This is the open-drain line for signaling i2c mastery
 int The32kPin = 24;  // This is a 32k squarewave from the DS3231
 
-
 // Battery monitor
-float stateOfCharge = 0;
+float stateOfCharge = 0;    // Initialize state of charge
 
 // FRAM and Unix time variables
-unsigned int  framAddr;
-unsigned long unixTime;
-tmElements_t currentTime;
-tmElements_t t;
+//unsigned int  framAddr;
+unsigned long unixTime;     // This is time / date encoded as a 32-bit word
+tmElements_t currentTime;   // Here we have a data structure for date and time
+tmElements_t t;         // Variable use for passing date / time
 int lastHour = 0;  // For recording the startup values
-int lastDate = 0;
+int lastDate = 0;   // For providing dat break counts
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 unsigned int hourlyPersonCount = 0;  // hourly counter
 unsigned int dailyPersonCount = 0;   //  daily counter
-byte currentHourlyPeriod;    // This is where we will know if the period changed
-byte currentDailyPeriod;     // We will keep daily counts as well as period counts
+//byte currentHourlyPeriod;    // This is where we will know if the period changed
+//byte currentDailyPeriod;     // We will keep daily counts as well as period counts
 int setYear,setMonth,setDay,setHour,setMinute,setSecond;
 
 
 // Variables for Simblee Display
-uint8_t ui_RefreshButton;
-uint8_t ui_ReturnButton;
-uint8_t ui_StartStopSwitch;
-uint8_t ui_StartStopStatus;
-uint8_t ui_DebounceSlider;
-uint8_t ui_SensitivitySlider;
-uint8_t ui_UpdateButton;
-uint8_t dateTimeField;
-uint8_t hourlyField;
-uint8_t dailyField;
-uint8_t chargeField;
-uint8_t menuBar;
-char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
-uint8_t hourlyTitle;
-uint8_t dailyTitle;
+uint8_t ui_RefreshButton;   // Refrsh button ID on Current Tab
+// uint8_t ui_ReturnButton;
+uint8_t ui_StartStopSwitch; // Start stop button ID on Admin Tab
+uint8_t ui_StartStopStatus; // Test field ID for start stop status on Admin Tab
+uint8_t ui_DebounceSlider;  // Slider ID for adjusting debounce on Admin Tab
+uint8_t ui_SensitivitySlider;   // Slider ID for adjusting sensitivity on Admin Tab
+uint8_t ui_UpdateButton;  // Update button ID on Admin Tab
+uint8_t dateTimeField;  // Text field on Current Tab
+uint8_t hourlyField;    // Hour field ID for Houly Tab
+uint8_t dailyField;     // Date feild ID for Hourly Tab
+uint8_t chargeField;    // State of charge field ID on Current Tab
+uint8_t menuBar;        // ID for the tabbed Menu Bar
+const char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
+const char *fields[] = { "Hr","Min","Sec","Yr","Mon","Sec"};
+// uint8_t hourlyTitle;
+// uint8_t dailyTitle;
 int currentScreen; // The ID of the current screen being displayed
-uint8_t ui_setYear, ui_setMonth,ui_setDay,ui_setHour,ui_setMinute,ui_setSecond;
+uint8_t ui_setYear, ui_setMonth,ui_setDay,ui_setHour,ui_setMinute,ui_setSecond; // Element which displays date and time values on Admin Tab
+uint8_t ui_hourStepper, ui_minStepper, ui_secStepper, ui_yearStepper, ui_monthStepper, ui_dayStepper;   // Stepper IDs for adjusting on Admin Tab
 
 // Accelerometer Values
 int debounce;               // This is a minimum debounce value - additional debounce set using pot or remote terminal
@@ -220,19 +218,12 @@ byte accelSensitivity;               // Hex variable for sensitivity
 
 // Variables for the control byte
 // Control Register  (8 - 4 Reserved, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
-byte signalDebounceChange = B0000001;
-byte signalSentitivityChange = B00000010;
-byte toggleStartStop = B00000100;
-byte signalTimeChange = B00001000;
-byte controlRegisterValue;
+byte signalDebounceChange = B0000001;  // Mask for accessing the debounce bit
+byte signalSentitivityChange = B00000010;   // Mask for accessing the sensitivity bit
+byte toggleStartStop = B00000100;   // Mask for accessing the start / stop bit
+// byte signalTimeChange = B00001000;  // Mask for accessing the time change bit
+byte controlRegisterValue;  // Current value of the control register
 
-
-// Map Values
-int numberDays = 10;
-int numberHoursPerDay = 10;
-int seedDayValue = 1000;
-int seedHourValue = 100;
-boolean firstTime = 1;
 
 // include newlib printf float support (%f used in sprintf below)
 asm(".global _printf_float");
@@ -243,12 +234,14 @@ void setup()
 {
     Wire.beginOnPins(SCLpin,SDApin);
     Serial.begin(9600);
+    Serial.println("Startup delay...");
+    delay(1000); // This is to make sure that the Arduino boots first as it initializes the various devices
     
     // Unlike Arduino Simblee does not pre-define inputs
     pinMode(TalkPin, INPUT);  // Shared Talk line
     pinMode(The32kPin, INPUT);   // Shared 32kHz line from clock
-
-
+    
+    TakeTheBus(); // Need the bus as we access the FRAM
     if (fram.begin()) {  // you can stick the new i2c addr in here, e.g. begin(0x51);
         Serial.println("Found I2C FRAM");
     }
@@ -256,6 +249,7 @@ void setup()
         Serial.println("No I2C FRAM found ... check your connections\r\n");
         BlinkForever();
     }
+    GiveUpTheBus(); // OK, from now on we will use the FRAM functions which have buss management built in
 
     // Check to see if the memory map in the sketch matches the data on the chip
     if (FRAMread8(VERSIONADDR) != VERSIONNUMBER) {
@@ -277,105 +271,54 @@ void setup()
                 BlinkForever();
         }
     }
-    
-    
-    // Reset the control values
-    FRAMwrite8(CONTROLREGISTER, 0x0);
+
+    FRAMwrite8(CONTROLREGISTER, 0x0);       // Reset the control values
     
     // Set up the Simblee Mobile App
     SimbleeForMobile.deviceName = "Ulmstead";          // Device name
     SimbleeForMobile.advertisementData = "counts";  // Name of data service
     SimbleeForMobile.domain = "ulmstead.simblee.com";    // use a shared cache
     SimbleeForMobile.begin();
+    
+    Serial.println("Ready to go....");
 }
 
 // Add loop code
 void loop()
 {
-    // process must be called in the loop for SimbleeForMobile
-    SimbleeForMobile.process();
-    if (firstTime) {
-        //MemoryMapReport();
-        Serial.println("Ready to go....");
-        firstTime = 0;
-    }
-
+    SimbleeForMobile.process(); // process must be called in the loop for SimbleeForMobile
 }
-
-void MemoryMapReport()  // Creates a memory map report on start
-{
-    Serial.println(" ");
-    Serial.println("The first word - System Settings");
-    Serial.print("  Version number: "); Serial.println(FRAMread8(VERSIONADDR));
-    Serial.print("  Sensitivity: "); Serial.println(FRAMread8(SENSITIVITYADDR));
-    Serial.print("  Debounce: "); Serial.println(FRAMread16(DEBOUNCEADDR));
-    Serial.print("  Daily Pointer: "); Serial.println(FRAMread8(DAILYPOINTERADDR));
-    Serial.print("  Hourly Pointer: "); Serial.println(FRAMread16(HOURLYPOINTERADDR));
-    Serial.println(" ");
-    Serial.println("The second word - Current Settings");
-    Serial.print("  Current Hourly Count: "); Serial.println(FRAMread16(CURRENTHOURLYCOUNTADDR));
-    Serial.print("  Current Daily Count: "); Serial.println(FRAMread16(CURRENTDAILYCOUNTADDR));
-    Serial.print("  Current Count Time: "); Serial.println(FRAMread32(CURRENTCOUNTSTIME));
-    Serial.print("  Current Time Converted: "); toArduinoDateTime(FRAMread32(CURRENTCOUNTSTIME));
-    Serial.println(" ");
-    //Serial.print("  Current Time Midnight:  "); toArduinoDateTime(findMidnight(FRAMread32(CURRENTCOUNTSTIME)));
-    Serial.println(" ");
-    Serial.println("The daily count words");
-    for (int i=0; i<= numberDays-1; i++ )
-    {
-        Serial.print("  Day: "); Serial.print(i+1); Serial.print("  \t");
-        Serial.print(FRAMread8((DAILYOFFSET+i)*WORDSIZE)); Serial.print("/");
-        Serial.print(FRAMread8((DAILYOFFSET+i)*WORDSIZE+DAILYDATEOFFSET)); Serial.print("\t");
-        Serial.print("Count: "); Serial.print(FRAMread16((DAILYOFFSET+i)*WORDSIZE+DAILYCOUNTOFFSET)); Serial.print("\t");
-        Serial.print("Charge: "); Serial.print(FRAMread8((DAILYOFFSET+i)*WORDSIZE+DAILYBATTOFFSET)); Serial.println("%");
-    }
-    for (int i=0; i<= numberHoursPerDay*numberDays-1; i++ )
-    {
-        Serial.print("  TimeStamp: "); Serial.print(i+1); Serial.print("  \t");
-        toArduinoDateTime(FRAMread32((HOURLYOFFSET+i)*WORDSIZE)); Serial.print("  \t");
-        Serial.print("Count: "); Serial.print(FRAMread16((HOURLYOFFSET+i)*WORDSIZE+HOURLYCOUNTOFFSET)); Serial.print("\t");
-        Serial.print("Charge: "); Serial.print(FRAMread8((HOURLYOFFSET+i)*WORDSIZE+HOURLYBATTOFFSET)); Serial.println("%");
-    }
-}
-
 
 void SimbleeForMobile_onConnect()   // Actions to take once we get connected.
 {
-    /*
-     * Callback when a Central connects to this device
-     *
-     * Reset the current screen to non being displayed
-     */
-    currentScreen = -1;
+    currentScreen = -1;     // Reset the current screen to non being displayed
+    Serial.print("The dimensions (H/W) of the screen are:");    // Will start to use this information once we start accessing other phones
+    Serial.print(SimbleeForMobile.screenHeight);
+    Serial.print(" / ");
+    Serial.println(SimbleeForMobile.screenWidth);
 }
 
 
 void SimbleeForMobile_onDisconnect()    // Can clean up resources once we disconnect
 {
     /*
-     * Callback when a Central disconnects from this device
-     *
      * Not used in this sketch. Could clean up any resources
      * no longer required.
-     */
+    */
 }
 
 void ui()   // The function that defines the iPhone UI
 {
-    Serial.print("The dimensions (H/W) of the screen are:");
-    Serial.print(SimbleeForMobile.screenHeight);
-    Serial.print(" / ");
-    Serial.println(SimbleeForMobile.screenWidth);
 
-    if(SimbleeForMobile.screen == currentScreen) return;
-
-    currentScreen = SimbleeForMobile.screen;
+    if(SimbleeForMobile.screen == currentScreen) return;    // If we are on the right screen then we are all set
+    currentScreen = SimbleeForMobile.screen;    // If not, let's capture the current screen number
     switch(SimbleeForMobile.screen)
     {
         case 1:
-            createCurrentScreen();
-            SimbleeForMobile.updateValue(hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR));
+            createCurrentScreen();  // Create the current screen
+            SimbleeForMobile.updateValue(hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR)); // Populate the fields with values
             SimbleeForMobile.updateValue(dailyField, FRAMread16(CURRENTDAILYCOUNTADDR));
+            controlRegisterValue = FRAMread8(CONTROLREGISTER);
             if ((controlRegisterValue & toggleStartStop) >> 2) {
                 SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
             }
@@ -383,38 +326,36 @@ void ui()   // The function that defines the iPhone UI
             break;
 
         case 2:
-            createDailyScreen();
+            createDailyScreen(); // This screen is created and populated in one step
             break;
 
         case 3:
-            createHourlyScreen();
+            createHourlyScreen(); // This screen is created and populated in one step
             break;
             
         case 4:
-            createAdminScreen();
-            if ((controlRegisterValue & toggleStartStop) >> 2) {
+            createAdminScreen(); // Create the current screen
+            if ((controlRegisterValue & toggleStartStop) >> 2) {    // Populate the fields with values
                 SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
             }
             else SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
             debounce = FRAMread16(DEBOUNCEADDR);
             SimbleeForMobile.updateValue(ui_DebounceSlider, debounce);
-            accelInputValue = map(FRAMread8(SENSITIVITYADDR),0,64,0,10);
+            accelInputValue = FRAMread8(SENSITIVITYADDR);
             SimbleeForMobile.updateValue(ui_SensitivitySlider, accelInputValue);
-            toDateTimeValues(FRAMread32(CURRENTCOUNTSTIME));
-            
             break;
             
         default:
-            Serial.print("ui: Uknown screen requested: ");
+            Serial.print("ui: Uknown screen requested: ");  // Don't think we can get here using the menubar but just in case
             Serial.println(SimbleeForMobile.screen);
     }
 }
 
 void ui_event(event_t &event)   // This is where we define the actions to occur on UI events
 {
-    if (event.id == ui_RefreshButton && event.type == EVENT_RELEASE)
-    {
-        printEvent(event);
+    printEvent(event);
+    if (event.id == ui_RefreshButton && event.type == EVENT_RELEASE)       // Releasing the Refresh button on the Current screen
+    {                                                                      // Updates all the fields
         toArduinoDateTime(FRAMread32(CURRENTCOUNTSTIME));
         Serial.println("");
         SimbleeForMobile.updateValue(hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR));
@@ -423,9 +364,8 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
             SimbleeForMobile.updateValue(chargeField, batteryMonitor.getSoC());
         }
     }
-    else if (event.id == menuBar)
+    else if (event.id == menuBar)                                          // This is the event handler for the menu bar
     {
-        printEvent(event);
         switch(event.value)
         {
             case 0:
@@ -445,60 +385,79 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                 break;
         }
     }
-    else if (event.id == ui_StartStopSwitch && event.type == EVENT_RELEASE)
+    else if (event.id == ui_StartStopSwitch && event.type == EVENT_RELEASE) // Here is were we handle button release from the Admin screen
     {
-        printEvent(event);
-        FRAMwrite8(CONTROLREGISTER,toggleStartStop ^ controlRegisterValue);
         controlRegisterValue = FRAMread8(CONTROLREGISTER);
-        Serial.println((controlRegisterValue & toggleStartStop) >> 2);
+        FRAMwrite8(CONTROLREGISTER,toggleStartStop ^ controlRegisterValue);  // Toggle the start stop bit
         if ((controlRegisterValue & toggleStartStop) >> 2) {
-            SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
+            SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
         }
-        else SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
+        else SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
     }
-    else if (event.id == ui_DebounceSlider)
+    else if (event.id == ui_DebounceSlider && event.type == EVENT_RELEASE) // Moving the debounce slider on the Admin Tab
     {
         debounce = event.value;
-        Serial.print("debounce value =");
-        Serial.println(debounce);
     }
-    else if (event.id == ui_SensitivitySlider)
+    else if (event.id == ui_SensitivitySlider && event.type == EVENT_RELEASE)  // Moving the sensitivity  slider on the Admin Tab
     {
         accelInputValue = event.value;
-        Serial.print("sensitivty value =");
-        Serial.println(accelInputValue);
     }
-    else if (event.id == ui_UpdateButton && event.type == EVENT_RELEASE)
+    else if (event.id == ui_UpdateButton && event.type == EVENT_RELEASE)  // A bit more complicated - Update botton event on Admin Tab
     {
-        accelSensitivity = map(accelInputValue,0,10,0,64);
-        DateTime t = DateTime(setYear,setMonth,setDay,setHour,setMinute,setSecond); // Convert to Unit Timx
-        unsigned long unixTime = toUnixTime(t);  // Convert to UNIX Time
-        if (FRAMread16(DEBOUNCEADDR) != debounce)
+        accelSensitivity = map(accelInputValue,0,10,0,16);  // Map slider values - today only using sensitivity up to 16 (out of 256 possible)
+
+        if (FRAMread16(DEBOUNCEADDR) != debounce)    // Check to see if debounce value needs to be updated
         {
-            FRAMwrite16(DEBOUNCEADDR, debounce);
-            FRAMwrite8(CONTROLREGISTER,signalDebounceChange |= controlRegisterValue);
-            Serial.println("Updating debounce");
+            FRAMwrite16(DEBOUNCEADDR, debounce);    // If so, write to FRAM
+            FRAMwrite8(CONTROLREGISTER,signalDebounceChange ^ controlRegisterValue);    // Then set the flag so Arduino will apply new setting
+            Serial.println("Updating debounce");    // Let the console know
         }
-        else if (FRAMread8(SENSITIVITYADDR)!=accelSensitivity)
+        if (FRAMread8(SENSITIVITYADDR) != accelSensitivity) // Same as debounce above - but now for sensitivity
         {
             FRAMwrite8(SENSITIVITYADDR, accelSensitivity);
-            FRAMwrite8(CONTROLREGISTER,signalSentitivityChange |= controlRegisterValue);
+            FRAMwrite8(CONTROLREGISTER,signalSentitivityChange ^ controlRegisterValue);
             Serial.println("Updating sensitivity");
         }
-        else if (FRAMread32(CURRENTCOUNTSTIME) != unixTime)
+        if (setYear >> 0 && setMonth >> 0 && setDay >> 0) // Will only update the update if these values are all non-zero
         {
-            FRAMwrite32(CURRENTCOUNTSTIME, unixTime);   // Write to FRAM - this is so we know when the last counts were saved
-            FRAMwrite8(CONTROLREGISTER,signalTimeChange |= controlRegisterValue);
+            TakeTheBus();  // Clock is an i2c device
+            rtc.adjust(DateTime(setYear,setMonth,setDay,setHour, setMinute, setSecond));  // Set the clock using values from the screen
+            GiveUpTheBus();
             Serial.println("Updating time");
         }
-        controlRegisterValue = FRAMread8(CONTROLREGISTER);
+        controlRegisterValue = FRAMread8(CONTROLREGISTER);  // Read and display the control register after these updates
         Serial.print("Control Register Value =");
         Serial.println(controlRegisterValue);
     }
-    else
+    else if (event.id == ui_hourStepper)    // Used to increment / decrement values for setting clock on the Admin Screen
     {
-        Serial.print("Cound not find event.id = ");
-        Serial.println(event.id);
+        setHour = event.value;
+        SimbleeForMobile.updateValue(ui_setHour, setHour);
+    }
+    else if (event.id == ui_minStepper)
+    {
+        setMinute = event.value;
+        SimbleeForMobile.updateValue(ui_setMinute, setMinute);
+    }
+    else if (event.id == ui_secStepper)
+    {
+        setSecond = event.value;
+        SimbleeForMobile.updateValue(ui_setSecond, setSecond);
+    }
+    else if (event.id == ui_yearStepper)
+    {
+        setYear = event.value;
+        SimbleeForMobile.updateValue(ui_setYear, setYear);
+    }
+    else if (event.id == ui_monthStepper)
+    {
+        setMonth = event.value;
+        SimbleeForMobile.updateValue(ui_setMonth, setMonth);
+    }
+    else if (event.id == ui_dayStepper)
+    {
+        setDay = event.value;
+        SimbleeForMobile.updateValue(ui_setDay, setDay);
     }
 }
 
@@ -614,32 +573,48 @@ void createAdminScreen() // This is the screen that displays current status info
     menuBar = SimbleeForMobile.drawSegment(10, 90, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 3);
 
+    const char hourly[] = "Hr";
+
     
     // The first control will be a switch
     controlRegisterValue = FRAMread8(CONTROLREGISTER);
 
-    ui_StartStopStatus = SimbleeForMobile.drawText(200, 160, " ");
+    ui_StartStopStatus = SimbleeForMobile.drawText(190, 160, " ");
 
-    ui_StartStopSwitch = SimbleeForMobile.drawButton(20,150,150, "Start/Stop");
+    ui_StartStopSwitch = SimbleeForMobile.drawButton(60,150,120, "Start/Stop");
     SimbleeForMobile.setEvents(ui_StartStopSwitch, EVENT_RELEASE);
     
-    SimbleeForMobile.drawText(20,220,"0ms          Debounce        1000ms");
+    SimbleeForMobile.drawText(20,220,"0 sec          Debounce           1 sec");
     ui_DebounceSlider = SimbleeForMobile.drawSlider(20,240,270,0,1000);
  
-    SimbleeForMobile.drawText(20,280,"Max           Sensitivity         Min");
-    ui_SensitivitySlider = SimbleeForMobile.drawSlider(20,300,270,0,10);
+    SimbleeForMobile.drawText(20,280,"Max            Sensitivity           Min");
+    ui_SensitivitySlider = SimbleeForMobile.drawSlider(20,300,270,0,16);
 
-    SimbleeForMobile.drawText(20,340,"Set Date");
-    ui_setYear = SimbleeForMobile.drawTextField(20,360,60,setYear,"year");
-    ui_setMonth = SimbleeForMobile.drawTextField(100,360,60,setMonth,"mon");
-    ui_setDay = SimbleeForMobile.drawTextField(180,360,60,setDay,"day");
+    //SimbleeForMobile.drawText(20,340,"Set Date");
+    ui_setYear = SimbleeForMobile.drawTextField(35,350,60,setYear);
+    ui_setMonth = SimbleeForMobile.drawTextField(135,350,45,setMonth);
+    ui_setDay = SimbleeForMobile.drawTextField(240,350,40,setDay);
 
-    SimbleeForMobile.drawText(20,400,"Set Time");
-    ui_setHour = SimbleeForMobile.drawTextField(20,420,60,setHour,"hr");
-    ui_setMinute = SimbleeForMobile.drawTextField(100,420,60,setMinute,"min");
-    ui_setSecond = SimbleeForMobile.drawTextField(180,420,60,setSecond,"sec");
+    //SimbleeForMobile.drawText(20,400,"Set Time");
+    ui_setHour = SimbleeForMobile.drawTextField(40,410,40,setHour);
+    ui_setMinute = SimbleeForMobile.drawTextField(135,410,45,setMinute);
+    ui_setSecond = SimbleeForMobile.drawTextField(230,410,40,setSecond);
+
+    ui_hourStepper = SimbleeForMobile.drawStepper(15,440,20,0,24);
+    ui_minStepper = SimbleeForMobile.drawStepper(110,440,20,0,60);
+    ui_secStepper = SimbleeForMobile.drawStepper(205,440,20,0,60);
+    ui_yearStepper = SimbleeForMobile.drawStepper(15,380,20,2016,2017);
+    ui_monthStepper = SimbleeForMobile.drawStepper(110,380,20,1,12);
+    ui_dayStepper = SimbleeForMobile.drawStepper(205,380,20,1,31);
     
-    ui_UpdateButton = SimbleeForMobile.drawButton(90,500,150, "Update");
+    SimbleeForMobile.updateText(ui_setHour,"HH");
+    SimbleeForMobile.updateText(ui_setMinute,"MM");
+    SimbleeForMobile.updateText(ui_setSecond,"SS");
+    SimbleeForMobile.updateText(ui_setYear,"YYYY");
+    SimbleeForMobile.updateText(ui_setMonth,"MM");
+    SimbleeForMobile.updateText(ui_setDay,"DD");
+    
+    ui_UpdateButton = SimbleeForMobile.drawButton(100,500,120, "Update");
     SimbleeForMobile.setEvents(ui_UpdateButton, EVENT_RELEASE);
     
     SimbleeForMobile.endScreen();
@@ -648,30 +623,73 @@ void createAdminScreen() // This is the screen that displays current status info
 
 void printEvent(event_t &event)     // Utility method to print information regarding the given event
 {
-    Serial.println("  Screen:");
-    Serial.print("   Screen Value:");
-    Serial.println(SimbleeForMobile.screen);
-    Serial.print("   currentScreen = ");
-    Serial.println(currentScreen);
-                 
+    switch (currentScreen) {
+        case 1:
+            Serial.print("On Current screen ");
+            break;
+        case 2:
+            Serial.print("On Daily screen ");
+            break;
+        case 3:
+            Serial.print("On Hourly screen ");
+            break;
+        case 4:
+            Serial.print("On Admin screen ");
+            break;
+        default:
+            break;
+    }
+    switch (event.id) {
+        case 0:
+            Serial.print("the Menu bar");
+            break;
+        case 2:
+            Serial.print("the Start / Stop Button");
+            break;
+        case 4:
+            Serial.print("the Debounce slider");
+            break;
+        case 6:
+            Serial.print("the Sensitivity slider");
+            break;
+        case 11:
+            Serial.print("the Refresh button");
+            break;
+        case 19:
+            Serial.print("the Update button");
+            break;
+        default:
+            Serial.print(" element ");
+            Serial.print(event.id);
+            break;
+    }
+    switch (event.type) {
+        case 0:
+            Serial.print(" was pressed with a value of ");
+            Serial.println(event.value);
+            break;
+        case 1:
+            Serial.println(" was pressed");
+            break;
+        case 2:
+            Serial.println(" was released");
+            break;
+        default:
+            Serial.print(" had an event ");
+            Serial.println(event.type);
+            break;
+    }
     
-    Serial.println("  Event:");
-    Serial.print("   ID: ");
-    Serial.println(event.id);
-    
-    Serial.print("    Type: ");
-    Serial.println(event.type);
-    
-    Serial.print("    Value: ");
-    Serial.println(event.value);
-    
+  /*
+   
     Serial.print("    Text: ");
     Serial.println(event.text);
     
     Serial.print("    Coords: ");
     Serial.print(event.x);
     Serial.print(",");
-    Serial.println(event.y);  
+    Serial.println(event.y); 
+   */
 }
 
 
@@ -786,13 +804,6 @@ void toDateTimeValues(unsigned long unixT)   // Converts to date time for the Va
 {
     TimeElements timeElement;
     breakTime(unixT, timeElement);
-    
-    //setYear = timeElement.Year;
-    //setMonth = timeElement.Month;
-    //setDay = timeElement.Day;
-    //setHour = timeElement.Hour;
-    //setMinute = timeElement.Minute;
-    //setSecond = timeElement.Second;
 
     SimbleeForMobile.updateValue(ui_setYear, int(timeElement.Year)-30);
     SimbleeForMobile.updateValue(ui_setMonth, int(timeElement.Month));
@@ -867,7 +878,8 @@ void toArduinoDateTime(unsigned long unixT)   // Converts to date time for the U
         dateTimeArray[15] = int(timeElement.Second/10)+48;
         dateTimeArray[16] = (timeElement.Second%10)+48;
     }
-    Serial.print(dateTimePointer);
+    Serial.print("Current Date and Time: ");
+    Serial.println(dateTimePointer);
     SimbleeForMobile.updateText(dateTimeField, dateTimePointer);
 }
 
@@ -913,25 +925,30 @@ void BlinkForever()
 
 boolean TakeTheBus()
 {
-    int timeout = 10000;  // We will wait ten seconds then give up
-    unsigned long startListening = millis();
-    while(digitalRead(The32kPin)) {} // The Simblee will wait until the SQW pin goes low
-    //Serial.println("Simblee a low SQW Pin");
-    while (!digitalRead(TalkPin))  { // Only proceed once the TalkPin is high or we timeout
-        //Serial.println("Simblee a Low Talk Pin");
-        if (millis() >= timeout + startListening) return 0;  // timed out
+    //Serial.print("Simblee: Asking for the bus...");
+    while(digitalRead(The32kPin)) {} // The Simblee will only read the Talk line when SQW pin goes low
+    //Serial.print("..Tick..TalkPin=");
+    //Serial.print(digitalRead(TalkPin));
+    while (!digitalRead(TalkPin)) { // Only proceed once the TalkPin is high
+        NonBlockingDelay(50);
     }
-    //Serial.println("Simblee a High Talk Pin");
-    pinMode(TalkPin,OUTPUT);  // Change to output
-    digitalWrite(TalkPin,LOW);  // Claim the bus
-    return 1;           // We have it
+    pinMode(TalkPin,OUTPUT);        // Change to output
+    digitalWrite(TalkPin,LOW);      // Claim the bus by bringing the TalkPin LOW
+    //Serial.println("..We have the bus");
+    return 1;                       // We have it
 }
 
 boolean GiveUpTheBus()
 {
-
-    pinMode(TalkPin,INPUT);  // Start listening again
-    //Serial.println("Simblee gave up the Bus");
-
+    digitalWrite(TalkPin,HIGH); // Not sure if this is needed - still for completeness.
+    pinMode(TalkPin,INPUT_PULLUP);  // Start listening again
+    //Serial.println("Simblee: We gave up the Bus");
     return 1;
+}
+
+void NonBlockingDelay(int millisDelay)  // Used for a non-blocking delay
+{
+    unsigned long commandTime = millis();
+    while (millis() <= millisDelay + commandTime) { }
+    return;
 }
