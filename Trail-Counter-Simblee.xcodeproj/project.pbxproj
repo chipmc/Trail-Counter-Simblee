@@ -12,6 +12,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		813364521D3848E500BCF105 /* FRAMcommon.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FRAMcommon.h; sourceTree = "<group>"; };
 		81F89FB41CE16D5500530EC0 /* Index */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Index; sourceTree = BUILT_PRODUCTS_DIR; };
 		81F89FB71CE16D5500530EC0 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		81F89FB91CE16D5500530EC0 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
@@ -230,6 +231,7 @@
 				81F89FBE1CE16D5500530EC0 /* Configurations */,
 				81F8A02F1CE16D5500530EC0 /* Makefiles */,
 				81F8A0651CE16D5600530EC0 /* Utilities */,
+				813364521D3848E500BCF105 /* FRAMcommon.h */,
 			);
 			path = "Trail-Counter-Simblee";
 			sourceTree = "<group>";
