@@ -22,6 +22,9 @@ void FRAMwrite8(unsigned int address, uint8_t value);    // Write 8 bits to FRAM
 void FRAMwrite8(unsigned int address, uint8_t value); //Writes a 32-bit word
 void ResetFRAM();  // This will reset the FRAM - set the version and preserve delay and sensitivity
 
+// Variables
+boolean clockHighorLow = HIGH;  // Set this as HIGH for for one Master and LOW for the other.
+
 // Prototypes for i2c functions
 boolean GiveUpTheBus(); // Give up the i2c bus
 boolean TakeTheBus(); // Take the 12c bus
@@ -146,9 +149,11 @@ void ResetFRAM()  // This will reset the FRAM - set the version and preserve del
 boolean TakeTheBus()
 {
     //Serial.print("Simblee: Asking for the bus...");
-    while(digitalRead(The32kPin)) {} // The Simblee will only read the Talk line when SQW pin goes low
-    //Serial.print("..Tick..TalkPin=");
-    //Serial.print(digitalRead(TalkPin));
+    if (clockHighorLow) {
+        while(digitalRead(The32kPin)) {} // The Simblee will only read the Talk line when SQW pin goes low
+    }
+    else while(!(digitalRead(The32kPin))) {} // The Simblee will only read the Talk line when SQW pin goes low
+
     while (!digitalRead(TalkPin)) { // Only proceed once the TalkPin is high
         NonBlockingDelay(50);
     }

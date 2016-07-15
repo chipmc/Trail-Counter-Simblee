@@ -124,8 +124,6 @@ MAX17043 batteryMonitor;                      // Init the Fuel Gauge
 RTC_DS3231 rtc;                               // Init the DS3231
 
 
-
-
 // Prototypes for General Functions
 void BlinkForever(); // Ends execution if there is an error
 int sprintf ( char * str, const char * format, ... );
@@ -156,12 +154,10 @@ void printEvent(event_t &event);     // Utility method to print information rega
 int SCLpin = 13;    // Simblee i2c Clock pin
 int SDApin = 14;    // Simblee i2c Data pin
 
-
 // Battery monitor
 float stateOfCharge = 0;    // Initialize state of charge
 
 // FRAM and Unix time variables
-//unsigned int  framAddr;
 unsigned long unixTime;     // This is time / date encoded as a 32-bit word
 tmElements_t currentTime;   // Here we have a data structure for date and time
 tmElements_t t;         // Variable use for passing date / time
@@ -170,9 +166,8 @@ int lastDate = 0;   // For providing dat break counts
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 unsigned int hourlyPersonCount = 0;  // hourly counter
 unsigned int dailyPersonCount = 0;   //  daily counter
-//byte currentHourlyPeriod;    // This is where we will know if the period changed
-//byte currentDailyPeriod;     // We will keep daily counts as well as period counts
 int setYear,setMonth,setDay,setHour,setMinute,setSecond;
+
 
 
 // Variables for Simblee Display
@@ -191,8 +186,6 @@ uint8_t chargeField;    // State of charge field ID on Current Tab
 uint8_t menuBar;        // ID for the tabbed Menu Bar
 const char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
 const char *fields[] = { "Hr","Min","Sec","Yr","Mon","Sec"};
-// uint8_t hourlyTitle;
-// uint8_t dailyTitle;
 int currentScreen; // The ID of the current screen being displayed
 uint8_t ui_setYear, ui_setMonth,ui_setDay,ui_setHour,ui_setMinute,ui_setSecond; // Element which displays date and time values on Admin Tab
 uint8_t ui_hourStepper, ui_minStepper, ui_secStepper, ui_yearStepper, ui_monthStepper, ui_dayStepper;   // Stepper IDs for adjusting on Admin Tab
@@ -262,7 +255,7 @@ void setup()
     FRAMwrite8(CONTROLREGISTER, 0x0);       // Reset the control values
     
     // Set up the Simblee Mobile App
-    SimbleeForMobile.deviceName = "Ulmstead 2";          // Device name
+    SimbleeForMobile.deviceName = "Ulmstead New";          // Device name
     SimbleeForMobile.advertisementData = "counts";  // Name of data service
     SimbleeForMobile.domain = "ulmstead.simblee.com";    // use a shared cache
     SimbleeForMobile.begin();
