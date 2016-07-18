@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		813364561D3D279B00BCF105 /* Trail_Counter_Simblee.ino in Sources */ = {isa = PBXBuildFile; fileRef = 81F8A0771CE16D5600530EC0 /* Trail_Counter_Simblee.ino */; };
 		81F89FB81CE16D5500530EC0 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 81F89FB71CE16D5500530EC0 /* main.cpp */; };
 		81F89FBA1CE16D5500530EC0 /* Makefile in Sources */ = {isa = PBXBuildFile; fileRef = 81F89FB91CE16D5500530EC0 /* Makefile */; };
 /* End PBXBuildFile section */
@@ -15,7 +16,7 @@
 		813364521D3848E500BCF105 /* FRAMcommon.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FRAMcommon.h; sourceTree = "<group>"; };
 		81F89FB41CE16D5500530EC0 /* Index */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Index; sourceTree = BUILT_PRODUCTS_DIR; };
 		81F89FB71CE16D5500530EC0 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
-		81F89FB91CE16D5500530EC0 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		81F89FB91CE16D5500530EC0 /* Makefile */ = {isa = PBXFileReference; explicitFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		81F89FBB1CE16D5500530EC0 /* ReadMe.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ReadMe.txt; sourceTree = "<group>"; };
 		81F89FBD1CE16D5500530EC0 /* Sketchbook.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = Sketchbook.txt; path = Sketchbook/Sketchbook.txt; sourceTree = "<group>"; };
 		81F89FBF1CE16D5500530EC0 /* 4D Systems PICadillo 35T.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "4D Systems PICadillo 35T.xcconfig"; path = "Configurations/4D Systems PICadillo 35T.xcconfig"; sourceTree = "<group>"; };
@@ -693,6 +694,7 @@
 			files = (
 				81F89FBA1CE16D5500530EC0 /* Makefile in Sources */,
 				81F89FB81CE16D5500530EC0 /* main.cpp in Sources */,
+				813364561D3D279B00BCF105 /* Trail_Counter_Simblee.ino in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

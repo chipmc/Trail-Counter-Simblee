@@ -72,6 +72,8 @@
     #   error Platform not defined
 #endif // end IDE
 
+
+
 // Set parameters
 //Time Period Deinifinitions - used for debugging
 #define HOURLYPERIOD t.hour()   // Normally t.hour but can use t.min for debugging
@@ -107,9 +109,9 @@
 
 // Include application, user and local libraries
 #include <Arduino.h>
-#include "Wire.h"
-#include "TimeLib.h"               // This library brings Unix Time capabilities
-#include "RTClib.h"
+#include "Wire.h"               //http://arduino.cc/en/Reference/Wire (included with Arduino IDE)
+#include <DS3232RTC.h>          //http://github.com/JChristensen/DS3232RTC
+#include <Time.h>               //http://www.arduino.cc/playground/Code/Time
 #include "MAX17043.h"           // Drives the LiPo Fuel Gauge
 #include "Adafruit_FRAM_I2C.h"   // Note - had to comment out the Wire.begin() in this library
 #include "SimbleeForMobile.h"
@@ -121,7 +123,6 @@
 // Prototypes
 // Prototypes From the included libraries
 MAX17043 batteryMonitor;                      // Init the Fuel Gauge
-RTC_DS3231 rtc;                               // Init the DS3231
 
 
 // Prototypes for General Functions
@@ -132,9 +133,8 @@ int sprintf ( char * str, const char * format, ... );
 
 // Prototypes for Date and Time Functions
 void toArduinoHour(unsigned long timeElement, int xAxis, int yAxis);  // Just gets the hour
-void toArduinoDateTime(unsigned long unixT); // Puts time in format for reporting
-unsigned long toUnixTime(DateTime ut);  // For efficiently storing time in memory
-void toDateTimeValues(unsigned long unixT);   // Converts to date time for the Values on the Settings Tab
+void toArduinoTime(time_t unixT); // Puts time in format for reporting
+
 
 
 // Prototypes for the Simblee
@@ -158,21 +158,18 @@ int SDApin = 14;    // Simblee i2c Data pin
 float stateOfCharge = 0;    // Initialize state of charge
 
 // FRAM and Unix time variables
-unsigned long unixTime;     // This is time / date encoded as a 32-bit word
-tmElements_t currentTime;   // Here we have a data structure for date and time
-tmElements_t t;         // Variable use for passing date / time
+tmElements_t tm;        // Time elements (such as tm.Minues
+time_t t;               // UNIX time format (not note 32 bit number unless converted)
 int lastHour = 0;  // For recording the startup values
 int lastDate = 0;   // For providing dat break counts
-char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 unsigned int hourlyPersonCount = 0;  // hourly counter
 unsigned int dailyPersonCount = 0;   //  daily counter
-int setYear,setMonth,setDay,setHour,setMinute,setSecond;
+
 
 
 
 // Variables for Simblee Display
 uint8_t ui_RefreshButton;   // Refrsh button ID on Current Tab
-// uint8_t ui_ReturnButton;
 uint8_t ui_StartStopSwitch; // Start stop button ID on Admin Tab
 uint8_t ui_StartStopStatus; // Test field ID for start stop status on Admin Tab
 uint8_t ui_DebounceSlider;  // Slider ID for adjusting debounce on Admin Tab
@@ -201,7 +198,6 @@ byte signalDebounceChange = B0000001;  // Mask for accessing the debounce bit
 byte signalSentitivityChange = B00000010;   // Mask for accessing the sensitivity bit
 byte toggleStartStop = B00000100;   // Mask for accessing the start / stop bit
 byte toggleLEDs = B00001000;        // Mask for accessing the LED on off bit
-// byte signalTimeChange = B00001000;  // Mask for accessing the time change bit
 byte controlRegisterValue;  // Current value of the control register
 
 
@@ -392,10 +388,12 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
             FRAMwrite8(CONTROLREGISTER,controlRegisterValue);
             Serial.println("Updating sensitivity");
         }
-        if (setYear >> 0 && setMonth >> 0 && setDay >> 0) // Will only update the update if these values are all non-zero
+        if (tm.Year >> 0 && tm.Month >> 0 && tm.Day >> 0) // Will only update the update if these values are all non-zero
         {
+            t= makeTime(tm);
             TakeTheBus();  // Clock is an i2c device
-                rtc.adjust(DateTime(setYear,setMonth,setDay,setHour, setMinute, setSecond));  // Set the clock using values from the screen
+                RTC.set(t);             //use the time_t value to ensure correct weekday is set
+                setTime(t);
             GiveUpTheBus();
             Serial.println("Updating time");
         }
@@ -405,33 +403,33 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
     }
     else if (event.id == ui_hourStepper)    // Used to increment / decrement values for setting clock on the Admin Screen
     {
-        setHour = event.value;
-        SimbleeForMobile.updateValue(ui_setHour, setHour);
+        tm.Hour = event.value;
+        SimbleeForMobile.updateValue(ui_setHour, tm.Hour);
     }
     else if (event.id == ui_minStepper)
     {
-        setMinute = event.value;
-        SimbleeForMobile.updateValue(ui_setMinute, setMinute);
+        tm.Minute = event.value;
+        SimbleeForMobile.updateValue(ui_setMinute, tm.Minute);
     }
     else if (event.id == ui_secStepper)
     {
-        setSecond = event.value;
-        SimbleeForMobile.updateValue(ui_setSecond, setSecond);
+        tm.Second = event.value;
+        SimbleeForMobile.updateValue(ui_setSecond, tm.Second);
     }
     else if (event.id == ui_yearStepper)
     {
-        setYear = event.value;
-        SimbleeForMobile.updateValue(ui_setYear, setYear);
+        tm.Year = CalendarYrToTm(event.value);
+        SimbleeForMobile.updateValue(ui_setYear, tm.Year+1970);
     }
     else if (event.id == ui_monthStepper)
     {
-        setMonth = event.value;
-        SimbleeForMobile.updateValue(ui_setMonth, setMonth);
+        tm.Month = event.value;
+        SimbleeForMobile.updateValue(ui_setMonth, tm.Month);
     }
     else if (event.id == ui_dayStepper)
     {
-        setDay = event.value;
-        SimbleeForMobile.updateValue(ui_setDay, setDay);
+        tm.Day = event.value;
+        SimbleeForMobile.updateValue(ui_setDay, tm.Day);
     }
     controlRegisterValue = FRAMread8(CONTROLREGISTER);
     Serial.print("ControlRegisterValue = ");
@@ -467,11 +465,11 @@ void createCurrentScreen() // This is the screen that displays current status in
 void updateCurrentScreen() // Since we have to update this screen three ways: create, menu bar and refresh button
 {
     TakeTheBus();
-        DateTime now = rtc.now();
+        t = RTC.get();
         stateOfCharge = batteryMonitor.getSoC();
     GiveUpTheBus();
     
-    toArduinoDateTime(now.unixtime());  // Update Time Field on screen and in the console
+    toArduinoTime(t);  // Update Time Field on screen and in the console
     Serial.println("");
     
     if (stateOfCharge >= 105) {         // Update the value of the state of charge field
@@ -589,14 +587,14 @@ void createAdminScreen() // This is the screen that displays current status info
     ui_SensitivitySlider = SimbleeForMobile.drawSlider(20,300,270,0,16);
 
     //SimbleeForMobile.drawText(20,340,"Set Date");
-    ui_setYear = SimbleeForMobile.drawTextField(35,350,60,setYear);
-    ui_setMonth = SimbleeForMobile.drawTextField(135,350,45,setMonth);
-    ui_setDay = SimbleeForMobile.drawTextField(240,350,40,setDay);
+    ui_setYear = SimbleeForMobile.drawTextField(35,350,60,tm.Year);
+    ui_setMonth = SimbleeForMobile.drawTextField(135,350,45,tm.Month);
+    ui_setDay = SimbleeForMobile.drawTextField(240,350,40,tm.Day);
 
     //SimbleeForMobile.drawText(20,400,"Set Time");
-    ui_setHour = SimbleeForMobile.drawTextField(40,410,40,setHour);
-    ui_setMinute = SimbleeForMobile.drawTextField(135,410,45,setMinute);
-    ui_setSecond = SimbleeForMobile.drawTextField(230,410,40,setSecond);
+    ui_setHour = SimbleeForMobile.drawTextField(40,410,40,tm.Hour);
+    ui_setMinute = SimbleeForMobile.drawTextField(135,410,45,tm.Minute);
+    ui_setSecond = SimbleeForMobile.drawTextField(230,410,40,tm.Second);
 
     ui_hourStepper = SimbleeForMobile.drawStepper(15,440,20,0,24);
     ui_minStepper = SimbleeForMobile.drawStepper(110,440,20,0,60);
@@ -683,22 +681,7 @@ void printEvent(event_t &event)     // Utility method to print information regar
 }
 
 
-
-void toDateTimeValues(unsigned long unixT)   // Converts to date time for the Values on the Settings Tab
-{
-    TimeElements timeElement;
-    breakTime(unixT, timeElement);
-    SimbleeForMobile.updateValue(ui_setYear, int(timeElement.Year)-30);
-    SimbleeForMobile.updateValue(ui_setMonth, int(timeElement.Month));
-    SimbleeForMobile.updateValue(ui_setDay, int(timeElement.Day));
-    SimbleeForMobile.updateValue(ui_setHour, int(timeElement.Hour));
-    SimbleeForMobile.updateValue(ui_setMinute, int(timeElement.Minute));
-    SimbleeForMobile.updateValue(ui_setSecond, int(timeElement.Second));
-    
-}
-
-
-void toArduinoDateTime(unsigned long unixT)   // Converts to date time for the UI
+void toArduinoTime(time_t unixT)   // Converts to date time for the UI
 {
     char dateTimeArray[18]="mm/dd/yy hh:mm:ss";
     char *dateTimePointer;
@@ -766,6 +749,7 @@ void toArduinoDateTime(unsigned long unixT)   // Converts to date time for the U
     SimbleeForMobile.updateText(dateTimeField, dateTimePointer);
 }
 
+
 void toArduinoHour(unsigned long unixT, int xAxis, int yAxis)  // Just gets the hour
 {
     tmElements_t timeElement;
@@ -788,17 +772,6 @@ void toArduinoHour(unsigned long unixT, int xAxis, int yAxis)  // Just gets the 
     SimbleeForMobile.drawText(xAxis+12*columnWidth, yAxis,"00 ");
 }
 
-unsigned long toUnixTime(DateTime ut)   // For efficiently storing time in memory
-{
-    TimeElements timeElement;
-    timeElement.Month = ut.month();
-    timeElement.Day = ut.day();
-    timeElement.Year = (ut.year()-1970);
-    timeElement.Hour = ut.hour();
-    timeElement.Minute = ut.minute();
-    timeElement.Second = ut.second();
-    return makeTime(timeElement);
-}
 
 void BlinkForever()
 {
