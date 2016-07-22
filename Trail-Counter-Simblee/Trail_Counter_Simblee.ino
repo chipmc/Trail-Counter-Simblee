@@ -75,26 +75,21 @@
 
 
 // Set parameters
-//Time Period Deinifinitions - used for debugging
-#define HOURLYPERIOD t.hour()   // Normally t.hour but can use t.min for debugging
-#define DAILYPERIOD t.day() // Normally t.date but can use t.min or t.hour for debugging
-
 //These defines let me change the memory map without hunting through the whole program
-#define VERSIONNUMBER 5       // Increment this number each time the memory map is changed
+#define VERSIONNUMBER 6       // Increment this number each time the memory map is changed
 #define WORDSIZE 8            // For the Word size
 #define PAGESIZE 4096         // Memory size in bytes / word size - 256kb FRAM
 // First Word - 8 bytes for setting global values
 #define DAILYOFFSET 2        // First word of daily counts
-#define HOURLYOFFSET 16        // First word of hourly counts (remember we start counts at 1)
-#define DAILYCOUNTNUMBER 14    // used in modulo calculations - sets the # of days stored
-#define HOURLYCOUNTNUMBER 4078 // used in modulo calculations - sets the # of hours stored - 256k (4096-14-2)
+#define HOURLYOFFSET 32        // First word of hourly counts (remember we start counts at 1)
+#define DAILYCOUNTNUMBER 30    // used in modulo calculations - sets the # of days stored
+#define HOURLYCOUNTNUMBER 4064 // used in modulo calculations - sets the # of hours stored - 256k (4096-14-2)
 #define VERSIONADDR 0x0       // Memory Locations By Name not Number
 #define SENSITIVITYADDR 0x1   // For the 1st Word locations
 #define DEBOUNCEADDR 0x2        // Two bytes for debounce
-#define DAILYPOINTERADDR 0x4
+#define DAILYPOINTERADDR 0x4    // One byte for daily pointer
 #define HOURLYPOINTERADDR 0x5   // Two bytes for hourly pointer
 #define CONTROLREGISTER 0x7     // This is the control register acted on by both Simblee and Arduino
-
 //Second Word - 8 bytes for storing current counts
 #define CURRENTHOURLYCOUNTADDR 0x8
 #define CURRENTDAILYCOUNTADDR 0xA
@@ -109,9 +104,9 @@
 
 // Include application, user and local libraries
 #include <Arduino.h>
-#include "Wire.h"               //http://arduino.cc/en/Reference/Wire (included with Arduino IDE)
-#include <DS3232RTC.h>          //http://github.com/JChristensen/DS3232RTC
-#include <Time.h>               //http://www.arduino.cc/playground/Code/Time
+#include <Wire.h>               //http://arduino.cc/en/Reference/Wire (included with Arduino IDE)
+#include "DS3232RTC.h"          //http://github.com/JChristensen/DS3232RTC
+#include "Time.h"               //http://www.arduino.cc/playground/Code/Time
 #include "MAX17043.h"           // Drives the LiPo Fuel Gauge
 #include "Adafruit_FRAM_I2C.h"   // Note - had to comment out the Wire.begin() in this library
 #include "SimbleeForMobile.h"
@@ -132,7 +127,7 @@ int sprintf ( char * str, const char * format, ... );
 
 
 // Prototypes for Date and Time Functions
-void toArduinoHour(unsigned long timeElement, int xAxis, int yAxis);  // Just gets the hour
+void toArduinoHour(time_t unixT, int xAxis, int yAxis);  // Just gets the hour
 void toArduinoTime(time_t unixT); // Puts time in format for reporting
 
 
@@ -164,9 +159,6 @@ int lastHour = 0;  // For recording the startup values
 int lastDate = 0;   // For providing dat break counts
 unsigned int hourlyPersonCount = 0;  // hourly counter
 unsigned int dailyPersonCount = 0;   //  daily counter
-
-
-
 
 // Variables for Simblee Display
 uint8_t ui_RefreshButton;   // Refrsh button ID on Current Tab
@@ -200,18 +192,16 @@ byte toggleStartStop = B00000100;   // Mask for accessing the start / stop bit
 byte toggleLEDs = B00001000;        // Mask for accessing the LED on off bit
 byte controlRegisterValue;  // Current value of the control register
 
-
 // include newlib printf float support (%f used in sprintf below)
 asm(".global _printf_float");
-
 
 // Add setup code
 void setup()
 {
-    Wire.beginOnPins(SCLpin,SDApin);
+    Wire.beginOnPins(SCLpin,SDApin);  // Not sure if this talks to the i2c bus or not - just to be safe...
     Serial.begin(9600);
     Serial.println("Startup delay...");
-    delay(1000); // This is to make sure that the Arduino boots first as it initializes the various devices
+    delay(500); // This is to make sure that the Arduino boots first as it initializes the various devices
     
     // Unlike Arduino Simblee does not pre-define inputs
     pinMode(TalkPin, INPUT);  // Shared Talk line
@@ -247,13 +237,11 @@ void setup()
                 BlinkForever();
         }
     }
-
-    FRAMwrite8(CONTROLREGISTER, 0x0);       // Reset the control values
     
     // Set up the Simblee Mobile App
-    SimbleeForMobile.deviceName = "Ulmstead New";          // Device name
-    SimbleeForMobile.advertisementData = "counts";  // Name of data service
-    SimbleeForMobile.domain = "ulmstead.simblee.com";    // use a shared cache
+    SimbleeForMobile.deviceName = "Umstead";          // Device name
+    SimbleeForMobile.advertisementData = "Rte 70";  // Name of data service
+    SimbleeForMobile.domain = "umstead.simblee.com";    // use a shared cache
     SimbleeForMobile.begin();
     
     Serial.println("Ready to go....");
@@ -268,10 +256,6 @@ void loop()
 void SimbleeForMobile_onConnect()   // Actions to take once we get connected.
 {
     currentScreen = -1;     // Reset the current screen to non being displayed
-    Serial.print("The dimensions (H/W) of the screen are:");    // Will start to use this information once we start accessing other phones
-    Serial.print(SimbleeForMobile.screenHeight);
-    Serial.print(" / ");
-    Serial.println(SimbleeForMobile.screenWidth);
 }
 
 
@@ -285,7 +269,6 @@ void SimbleeForMobile_onDisconnect()    // Can clean up resources once we discon
 
 void ui()   // The function that defines the iPhone UI
 {
-
     if(SimbleeForMobile.screen == currentScreen) return;    // If we are on the right screen then we are all set
     currentScreen = SimbleeForMobile.screen;    // If not, let's capture the current screen number
     switch(SimbleeForMobile.screen)
@@ -301,6 +284,7 @@ void ui()   // The function that defines the iPhone UI
 
         case 3:
             createHourlyScreen(); // This screen is created and populated in one step
+            Serial.print("Hourly Screen Created");
             break;
             
         case 4:
@@ -492,8 +476,6 @@ void updateCurrentScreen() // Since we have to update this screen three ways: cr
         SimbleeForMobile.updateValue(ui_LEDswitch,1);
     }
     else SimbleeForMobile.updateValue(ui_LEDswitch,0);
-    
-
 }
 
 void createDailyScreen() // This is the screen that displays current status information
@@ -530,14 +512,16 @@ void createDailyScreen() // This is the screen that displays current status info
     SimbleeForMobile.endScreen();
 }
 
-void createHourlyScreen() // This is the screen that displays current status information
+void createHourlyScreen() // This is the screen that displays the past 24 hourly counts
 {
     int xAxis = 20;
     int yAxis = 140;
     int rowHeight = 15;
     int columnWidth = 5;
     int row = 1;
-    int hoursReported = 24;
+    
+    int hoursReported;
+    int numberHourlyDataPoints = FRAMread16(HOURLYPOINTERADDR);
 
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
     menuBar = SimbleeForMobile.drawSegment(10, 90, 280, titles, countof(titles));
@@ -547,24 +531,30 @@ void createHourlyScreen() // This is the screen that displays current status inf
     SimbleeForMobile.drawText(xAxis, yAxis,"Date");
     SimbleeForMobile.drawText(xAxis+26*columnWidth, yAxis,"Count");
     SimbleeForMobile.drawText(xAxis+39*columnWidth, yAxis,"Batt %");
-    for (int i=HOURLYCOUNTNUMBER; i>=1; i--) {
-        int address = (HOURLYOFFSET + (i+FRAMread16(HOURLYPOINTERADDR)) % HOURLYCOUNTNUMBER)*WORDSIZE;
-        if (FRAMread8((HOURLYOFFSET + (i+FRAMread16(HOURLYPOINTERADDR)) % HOURLYCOUNTNUMBER)*WORDSIZE) != 0) {
-            yAxis = yAxis + rowHeight;
-            if (yAxis > SimbleeForMobile.screenHeight) yAxis = 140 + rowHeight;
-            if (hoursReported > 0 ) hoursReported--;
-            else break;
-            unsigned long unixTime = FRAMread32((HOURLYOFFSET + (i+FRAMread16(HOURLYPOINTERADDR)) % HOURLYCOUNTNUMBER)*WORDSIZE);
-            toArduinoHour(unixTime,xAxis,yAxis);
-            SimbleeForMobile.drawText(xAxis+25*columnWidth, yAxis," - ");
-            SimbleeForMobile.drawText(xAxis+28*columnWidth, yAxis,FRAMread16(((HOURLYOFFSET + (i+FRAMread16(HOURLYPOINTERADDR)) % HOURLYCOUNTNUMBER)*WORDSIZE)+HOURLYCOUNTOFFSET));
-            SimbleeForMobile.drawText(xAxis+36*columnWidth, yAxis,"  -  ");
-            SimbleeForMobile.drawText(xAxis+40*columnWidth, yAxis,FRAMread8(((HOURLYOFFSET + (i+FRAMread16(HOURLYPOINTERADDR)) % HOURLYCOUNTNUMBER)*WORDSIZE)+HOURLYBATTOFFSET));
-            SimbleeForMobile.drawText(xAxis+44*columnWidth, yAxis,"%");
-        }
+    
+    if (numberHourlyDataPoints < 24) {
+        hoursReported = numberHourlyDataPoints;
     }
+    else hoursReported = 24;
+    
+    
+    for (int i=hoursReported; i > 0; i--) {
+        int address = (HOURLYOFFSET + (numberHourlyDataPoints - i) % HOURLYCOUNTNUMBER)*WORDSIZE;
+        yAxis = yAxis + rowHeight;
+        if (yAxis > SimbleeForMobile.screenHeight) yAxis = yAxis + rowHeight;
+        unsigned long unixTime = FRAMread32(address);
+        toArduinoHour(unixTime,xAxis,yAxis);
+        SimbleeForMobile.drawText(xAxis+25*columnWidth, yAxis," - ");
+        SimbleeForMobile.drawText(xAxis+28*columnWidth, yAxis,FRAMread16(address+HOURLYCOUNTOFFSET));
+        SimbleeForMobile.drawText(xAxis+36*columnWidth, yAxis,"  -  ");
+        SimbleeForMobile.drawText(xAxis+40*columnWidth, yAxis,FRAMread8(address+HOURLYBATTOFFSET));
+        SimbleeForMobile.drawText(xAxis+44*columnWidth, yAxis,"%");
+    }
+    
     SimbleeForMobile.endScreen();
+    
 }
+
 
 void createAdminScreen() // This is the screen that displays current status information
 {
@@ -685,7 +675,7 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
 {
     char dateTimeArray[18]="mm/dd/yy hh:mm:ss";
     char *dateTimePointer;
-    TimeElements timeElement;
+    tmElements_t timeElement;
     breakTime(unixT, timeElement);
     dateTimePointer = dateTimeArray;
 
@@ -750,7 +740,7 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
 }
 
 
-void toArduinoHour(unsigned long unixT, int xAxis, int yAxis)  // Just gets the hour
+void toArduinoHour(time_t unixT, int xAxis, int yAxis)  // Just gets the hour
 {
     tmElements_t timeElement;
     int columnWidth = 6;
