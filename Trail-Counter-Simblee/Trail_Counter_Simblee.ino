@@ -120,6 +120,7 @@
 MAX17043 batteryMonitor;                      // Init the Fuel Gauge
 
 
+
 // Prototypes for General Functions
 void BlinkForever(); // Ends execution if there is an error
 int sprintf ( char * str, const char * format, ... );
@@ -143,11 +144,15 @@ void createDailyScreen(); // This is the screen that displays current status inf
 void createHourlyScreen(); // This is the screen that displays current status information
 void createAdminScreen(); // This is the screen that you use to administer the device
 void printEvent(event_t &event);     // Utility method to print information regarding the given event
+int AlarmInteruptHandler(uint32_t dummyPin); // This is where we will take action when we detect an alarm
+volatile boolean alarmInterrupt = false;
+
 
 // Define variables and constants
 // Pin Value Variables
 int SCLpin = 13;    // Simblee i2c Clock pin
 int SDApin = 14;    // Simblee i2c Data pin
+int AlarmPin = 20;  // This is the open-drain line for signaling an Alarm
 
 // Battery monitor
 float stateOfCharge = 0;    // Initialize state of charge
@@ -206,6 +211,8 @@ void setup()
     // Unlike Arduino Simblee does not pre-define inputs
     pinMode(TalkPin, INPUT);  // Shared Talk line
     pinMode(The32kPin, INPUT);   // Shared 32kHz line from clock
+    pinMode(AlarmPin,INPUT);    // Shared DS3231 Alarm Pin
+    attachPinInterrupt(20,AlarmInteruptHandler,LOW);    // this will trigger an alarm that will put Simblee in low power mode until morning
     
     TakeTheBus(); // Need the bus as we access the FRAM
         if (fram.begin()) {  // you can stick the new i2c addr in here, e.g. begin(0x51);
@@ -241,7 +248,6 @@ void setup()
     // Set up the Simblee Mobile App
     SimbleeForMobile.deviceName = "Umstead";          // Device name
     SimbleeForMobile.advertisementData = "Rte 70";  // Name of data service
-    SimbleeForMobile.domain = "umstead.simblee.com";    // use a shared cache
     SimbleeForMobile.begin();
     
     Serial.println("Ready to go....");
@@ -251,6 +257,25 @@ void setup()
 void loop()
 {
     SimbleeForMobile.process(); // process must be called in the loop for SimbleeForMobile
+    if (alarmInterrupt)
+    {
+        Simblee_resetPinWake(20); // reset state of pin that caused wakeup
+        alarmInterrupt = false;
+        TakeTheBus();
+            t = RTC.get();
+        GiveUpTheBus();
+        if (hour(t) == 22) {
+            detachPinInterrupt(20);
+            Serial.println("Sleeping at 10om");
+            Simblee_pinWake(20, LOW); // configures pin 20 to wake up device on a Low signal
+            Simblee_ULPDelay(INFINITE);; // Stay in ultra low power mode until interrupt from the BLE or pin
+        }
+        else if (hour(t) == 6) {
+            attachPinInterrupt(20,AlarmInteruptHandler,LOW);
+            Serial.println("Waking up at 6am");
+        }
+        
+    }
 }
 
 void SimbleeForMobile_onConnect()   // Actions to take once we get connected.
@@ -261,10 +286,7 @@ void SimbleeForMobile_onConnect()   // Actions to take once we get connected.
 
 void SimbleeForMobile_onDisconnect()    // Can clean up resources once we disconnect
 {
-    /*
-     * Not used in this sketch. Could clean up any resources
-     * no longer required.
-    */
+    // Not sure how best to use this but will leave in case I come up with something
 }
 
 void ui()   // The function that defines the iPhone UI
@@ -284,7 +306,6 @@ void ui()   // The function that defines the iPhone UI
 
         case 3:
             createHourlyScreen(); // This screen is created and populated in one step
-            Serial.print("Hourly Screen Created");
             break;
             
         case 4:
@@ -425,7 +446,7 @@ void createCurrentScreen() // This is the screen that displays current status in
 {
 
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(10, 90, 280, titles, countof(titles));
+    menuBar = SimbleeForMobile.drawSegment(20, 60, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 0);
 
     // all we are doing here is laying out the screen - updates are in a separate function
@@ -481,77 +502,73 @@ void updateCurrentScreen() // Since we have to update this screen three ways: cr
 void createDailyScreen() // This is the screen that displays current status information
 {
     int xAxis = 30;
-    int yAxis = 140;
+    int yAxis = 90;
     int rowHeight = 15;
     int columnWidth = 5;
     int row = 1;
 
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(10, 90, 280, titles, countof(titles));
+    menuBar = SimbleeForMobile.drawSegment(20, 60, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 1);
     
-    SimbleeForMobile.drawText(100, 120, "Daily Screen");
     SimbleeForMobile.drawText(xAxis, yAxis,"Date");
     SimbleeForMobile.drawText(xAxis+21*columnWidth, yAxis,"Count");
     SimbleeForMobile.drawText(xAxis+41*columnWidth, yAxis,"Batt %");
+    SimbleeForMobile.endScreen();       // So, everything below this is not cached
+    
     for (int i=0; i < DAILYCOUNTNUMBER; i++) {
-        if (FRAMread8((DAILYOFFSET + (i+FRAMread8(DAILYPOINTERADDR)) % DAILYCOUNTNUMBER)*WORDSIZE+DAILYCOUNTOFFSET) != 0) {
-            yAxis = yAxis + rowHeight;
-            if (yAxis > SimbleeForMobile.screenHeight) yAxis = 140 + rowHeight;
-            SimbleeForMobile.drawText(xAxis, yAxis,FRAMread8((DAILYOFFSET + (i+FRAMread8(DAILYPOINTERADDR)) % DAILYCOUNTNUMBER)*WORDSIZE));
-            SimbleeForMobile.drawText(xAxis+3*columnWidth, yAxis,"/");
-            SimbleeForMobile.drawText(xAxis+5*columnWidth, yAxis,FRAMread8((DAILYOFFSET + (i+FRAMread8(DAILYPOINTERADDR)) % DAILYCOUNTNUMBER)*WORDSIZE+DAILYDATEOFFSET));
-            SimbleeForMobile.drawText(xAxis+15*columnWidth, yAxis," - ");
-            SimbleeForMobile.drawText(xAxis+22*columnWidth, yAxis,FRAMread16((DAILYOFFSET + (i+FRAMread8(DAILYPOINTERADDR)) % DAILYCOUNTNUMBER)*WORDSIZE+DAILYCOUNTOFFSET));
-            SimbleeForMobile.drawText(xAxis+34*columnWidth, yAxis,"  -  ");
-            SimbleeForMobile.drawText(xAxis+42*columnWidth, yAxis,FRAMread8((DAILYOFFSET + (i+FRAMread8(DAILYPOINTERADDR)) % DAILYCOUNTNUMBER)*WORDSIZE+DAILYBATTOFFSET));
-            SimbleeForMobile.drawText(xAxis+46*columnWidth, yAxis,"%");
-        }
+        int pointer = (DAILYOFFSET + (i+FRAMread8(DAILYPOINTERADDR)) % DAILYCOUNTNUMBER)*WORDSIZE;
+        yAxis = yAxis + rowHeight;
+        SimbleeForMobile.drawText(xAxis, yAxis,FRAMread8(pointer));
+        SimbleeForMobile.drawText(xAxis+3*columnWidth, yAxis,"/");
+        SimbleeForMobile.drawText(xAxis+5*columnWidth, yAxis,FRAMread8(pointer+DAILYDATEOFFSET));
+        SimbleeForMobile.drawText(xAxis+15*columnWidth, yAxis," - ");
+        SimbleeForMobile.drawText(xAxis+22*columnWidth, yAxis,FRAMread16(pointer+DAILYCOUNTOFFSET));
+        SimbleeForMobile.drawText(xAxis+34*columnWidth, yAxis,"  -  ");
+        SimbleeForMobile.drawText(xAxis+42*columnWidth, yAxis,FRAMread8(pointer+DAILYBATTOFFSET));
+        SimbleeForMobile.drawText(xAxis+46*columnWidth, yAxis,"%");
     }
-    SimbleeForMobile.drawText(xAxis, yAxis+rowHeight,"Done");
-    SimbleeForMobile.endScreen();
+
 }
 
 void createHourlyScreen() // This is the screen that displays the past 24 hourly counts
 {
-    int xAxis = 20;
-    int yAxis = 140;
+    int xAxis = 30;
+    int yAxis = 90;
     int rowHeight = 15;
     int columnWidth = 5;
     int row = 1;
-    
-    int hoursReported;
+    int hoursReported = 14;
     int numberHourlyDataPoints = FRAMread16(HOURLYPOINTERADDR);
 
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(10, 90, 280, titles, countof(titles));
+    menuBar = SimbleeForMobile.drawSegment(20, 60, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 2);
     
-    SimbleeForMobile.drawText(100, 120, "Hourly Screen");
     SimbleeForMobile.drawText(xAxis, yAxis,"Date");
     SimbleeForMobile.drawText(xAxis+26*columnWidth, yAxis,"Count");
     SimbleeForMobile.drawText(xAxis+39*columnWidth, yAxis,"Batt %");
     
-    if (numberHourlyDataPoints < 24) {
+    SimbleeForMobile.endScreen();       // So, everything below this is not cached
+    
+    if (numberHourlyDataPoints < hoursReported) {
         hoursReported = numberHourlyDataPoints;
     }
-    else hoursReported = 24;
     
-    
-    for (int i=hoursReported; i > 0; i--) {
+    for (int i=1; i <= hoursReported; i++) {
         int address = (HOURLYOFFSET + (numberHourlyDataPoints - i) % HOURLYCOUNTNUMBER)*WORDSIZE;
         yAxis = yAxis + rowHeight;
-        if (yAxis > SimbleeForMobile.screenHeight) yAxis = yAxis + rowHeight;
-        unsigned long unixTime = FRAMread32(address);
+        time_t unixTime = FRAMread32(address);
+        
         toArduinoHour(unixTime,xAxis,yAxis);
-        SimbleeForMobile.drawText(xAxis+25*columnWidth, yAxis," - ");
-        SimbleeForMobile.drawText(xAxis+28*columnWidth, yAxis,FRAMread16(address+HOURLYCOUNTOFFSET));
-        SimbleeForMobile.drawText(xAxis+36*columnWidth, yAxis,"  -  ");
-        SimbleeForMobile.drawText(xAxis+40*columnWidth, yAxis,FRAMread8(address+HOURLYBATTOFFSET));
-        SimbleeForMobile.drawText(xAxis+44*columnWidth, yAxis,"%");
+        SimbleeForMobile.drawText(xAxis+22*columnWidth, yAxis," - ");
+        SimbleeForMobile.drawText(xAxis+29*columnWidth, yAxis,FRAMread16(address+HOURLYCOUNTOFFSET));
+        SimbleeForMobile.drawText(xAxis+32*columnWidth, yAxis,"  -  ");
+        SimbleeForMobile.drawText(xAxis+41*columnWidth, yAxis,FRAMread8(address+HOURLYBATTOFFSET));
+        SimbleeForMobile.drawText(xAxis+46*columnWidth, yAxis,"%");
     }
-    
-    SimbleeForMobile.endScreen();
+    SimbleeForMobile.drawText(xAxis,yAxis,"Done");
+
     
 }
 
@@ -559,7 +576,7 @@ void createHourlyScreen() // This is the screen that displays the past 24 hourly
 void createAdminScreen() // This is the screen that displays current status information
 {
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(10, 90, 280, titles, countof(titles));
+    menuBar = SimbleeForMobile.drawSegment(20, 60, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 3);
 
     // The first control will be a switch
@@ -610,59 +627,29 @@ void createAdminScreen() // This is the screen that displays current status info
 void printEvent(event_t &event)     // Utility method to print information regarding the given event
 {
     switch (currentScreen) {
-        case 1:
-            Serial.print("On Current screen ");
-            break;
-        case 2:
-            Serial.print("On Daily screen ");
-            break;
-        case 3:
-            Serial.print("On Hourly screen ");
-            break;
-        case 4:
-            Serial.print("On Admin screen ");
-            break;
-        default:
-            break;
+        case 1: Serial.print("On Current screen "); break;
+        case 2: Serial.print("On Daily screen ");   break;
+        case 3: Serial.print("On Hourly screen ");  break;
+        case 4: Serial.print("On Admin screen ");   break;
+        default:                                    break;
     }
     switch (event.id) {
-        case 0:
-            Serial.print("the Menu bar");
-            break;
-        case 2:
-            Serial.print("the Start / Stop Button");
-            break;
-        case 4:
-            Serial.print("the Debounce slider");
-            break;
-        case 6:
-            Serial.print("the Sensitivity slider");
-            break;
-        case 10:
-            Serial.print("the Refresh button");
-            break;
-        case 12:
-            Serial.print("the LED on-off switch");
-            break;
-        case 19:
-            Serial.print("the Update button");
-            break;
+        case 0: Serial.print("the Menu bar");           break;
+        case 2: Serial.print("the Start/Stop Button");  break;
+        case 4: Serial.print("the Debounce slider");    break;
+        case 6: Serial.print("the Sensitivity slider"); break;
+        case 10:Serial.print("the Refresh button");     break;
+        case 12:Serial.print("the LED on-off switch");  break;
+        case 19:Serial.print("the Update button");      break;
         default:
             Serial.print(" element ");
             Serial.print(event.id);
             break;
     }
     switch (event.type) {
-        case 0:
-            Serial.print(" was pressed with a value of ");
-            Serial.println(event.value);
-            break;
-        case 1:
-            Serial.println(" was pressed");
-            break;
-        case 2:
-            Serial.println(" was released");
-            break;
+        case 0: Serial.print(" was pressed with a value of ");  Serial.println(event.value);    break;
+        case 1: Serial.println(" was pressed"); break;
+        case 2: Serial.println(" was released");break;
         default:
             Serial.print(" had an event ");
             Serial.println(event.type);
@@ -743,23 +730,29 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
 void toArduinoHour(time_t unixT, int xAxis, int yAxis)  // Just gets the hour
 {
     tmElements_t timeElement;
-    int columnWidth = 6;
+    int columnWidth = 5;
     breakTime(unixT, timeElement);
     if(timeElement.Month < 10) {
         SimbleeForMobile.drawText(xAxis, yAxis,"0");
-        SimbleeForMobile.drawText(xAxis+1.5*columnWidth, yAxis,timeElement.Month);
+        SimbleeForMobile.drawText(xAxis+2*columnWidth, yAxis,timeElement.Month);
     }
     else SimbleeForMobile.drawText(xAxis, yAxis,timeElement.Month);
-    SimbleeForMobile.drawText(xAxis+3*columnWidth, yAxis,"/");
+    SimbleeForMobile.drawText(xAxis+5*columnWidth, yAxis,"/");
     if(timeElement.Day < 10) {
-        SimbleeForMobile.drawText(xAxis+4*columnWidth, yAxis,"0");
-        SimbleeForMobile.drawText(xAxis+5.5*columnWidth, yAxis,timeElement.Day);
+        SimbleeForMobile.drawText(xAxis+6*columnWidth, yAxis,"0");
+        SimbleeForMobile.drawText(xAxis+7*columnWidth, yAxis,timeElement.Day);
     }
-    else SimbleeForMobile.drawText(xAxis+4*columnWidth, yAxis,timeElement.Day);
-    SimbleeForMobile.drawText(xAxis+8*columnWidth, yAxis," ");
-    SimbleeForMobile.drawText(xAxis+8*columnWidth, yAxis,timeElement.Hour);
-    SimbleeForMobile.drawText(xAxis+11*columnWidth, yAxis,":");
-    SimbleeForMobile.drawText(xAxis+12*columnWidth, yAxis,"00 ");
+    else SimbleeForMobile.drawText(xAxis+6*columnWidth, yAxis,timeElement.Day);
+    SimbleeForMobile.drawText(xAxis+10*columnWidth, yAxis," ");
+    SimbleeForMobile.drawText(xAxis+11*columnWidth, yAxis,timeElement.Hour);
+    SimbleeForMobile.drawText(xAxis+15*columnWidth, yAxis,":");
+    SimbleeForMobile.drawText(xAxis+16*columnWidth, yAxis,"00 ");
+}
+
+int AlarmInteruptHandler(uint32_t dummyPin) // This is where we will take action when we detect an alarm
+{
+    alarmInterrupt = true;
+    return 0;
 }
 
 
