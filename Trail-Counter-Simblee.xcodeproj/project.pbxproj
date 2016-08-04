@@ -225,6 +225,7 @@
 			isa = PBXGroup;
 			children = (
 				81F89FB71CE16D5500530EC0 /* main.cpp */,
+				813364521D3848E500BCF105 /* FRAMcommon.h */,
 				81F89FB91CE16D5500530EC0 /* Makefile */,
 				81F89FBB1CE16D5500530EC0 /* ReadMe.txt */,
 				81F8A0771CE16D5600530EC0 /* Trail_Counter_Simblee.ino */,
@@ -232,7 +233,6 @@
 				81F89FBE1CE16D5500530EC0 /* Configurations */,
 				81F8A02F1CE16D5500530EC0 /* Makefiles */,
 				81F8A0651CE16D5600530EC0 /* Utilities */,
-				813364521D3848E500BCF105 /* FRAMcommon.h */,
 			);
 			path = "Trail-Counter-Simblee";
 			sourceTree = "<group>";
