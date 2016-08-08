@@ -251,7 +251,7 @@ void setup()
     
     // Set up the Simblee Mobile App
     SimbleeForMobile.deviceName = "Umstead";          // Device name
-    SimbleeForMobile.advertisementData = "Dev";  // Name of data service
+    SimbleeForMobile.advertisementData = "Test";  // Name of data service
     SimbleeForMobile.begin();
     
     Serial.println("Ready to go....");
@@ -483,7 +483,7 @@ void createCurrentScreen() // This is the screen that displays current status in
 
 void updateCurrentScreen() // Since we have to update this screen three ways: create, menu bar and refresh button
 {
-    char battBuffer[3];   // Should be enough 3 digits plus % symbol
+    char battBuffer[4];   // Should be enough 3 digits plus % symbol
     
     TakeTheBus();
         t = RTC.get();
@@ -497,7 +497,7 @@ void updateCurrentScreen() // Since we have to update this screen three ways: cr
         SimbleeForMobile.drawText(210,200,"Error");
     }
     else {
-        snprintf(battBuffer, 4,"%1.0f%%",stateOfCharge);   // Puts % next to batt from 0-100
+        snprintf(battBuffer, 5,"%1.0f%%",stateOfCharge);   // Puts % next to batt from 0-100
         SimbleeForMobile.updateText(chargeField,battBuffer);
     }
     SimbleeForMobile.updateValue(hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR)); // Populate the hourly and daily fields with values
@@ -523,7 +523,7 @@ void createDailyScreen() // This is the screen that displays current status info
     int columnWidth = 5;
     int row = 1;
     int dailyCount = 0;
-    char battBuffer[3];   // Should be enough 3 digits plus % symbol
+    char battBuffer[4];   // Should be enough 3 digits plus % symbol
 
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
     menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
@@ -545,7 +545,7 @@ void createDailyScreen() // This is the screen that displays current status info
             SimbleeForMobile.drawText(xAxis+15*columnWidth, yAxis," - ");
             SimbleeForMobile.drawText(xAxis+22*columnWidth, yAxis,dailyCount);
             SimbleeForMobile.drawText(xAxis+34*columnWidth, yAxis,"  -  ");
-            snprintf(battBuffer, 4,"%u%%",FRAMread8(pointer+DAILYBATTOFFSET));   // Puts % next to batt from 0-100
+            snprintf(battBuffer, 5,"%u%%",FRAMread8(pointer+DAILYBATTOFFSET));   // Puts % next to batt from 0-100
             SimbleeForMobile.drawText(xAxis+42*columnWidth, yAxis,battBuffer);
         }
     }
@@ -563,8 +563,8 @@ void createHourlyScreen() // This is the screen that displays today's hourly cou
     int columnWidth = 5;
     int row = 1;
     int hourIndex = FRAMread16(HOURLYPOINTERADDR);
-    char battBuffer[3];   // Should be enough 3 digits plus % symbol
-    char hourBuffer[4];   // Should be enough for 4 hour and :00
+    char battBuffer[4];   // Should be enough 3 digits plus % symbol
+    char hourBuffer[5];   // Should be enough for 4 hour and :00
 
     TakeTheBus();
         t = RTC.get();                  // First we will establish the time
@@ -590,12 +590,12 @@ void createHourlyScreen() // This is the screen that displays today's hourly cou
             Serial.println("That is all for today");
             break;
         }
-        snprintf(hourBuffer, 5, "%i:00",hour(unixTime));
+        snprintf(hourBuffer, 6, "%i:00",hour(unixTime));
         SimbleeForMobile.drawText(xAxis, yAxis,hourBuffer);
         SimbleeForMobile.drawText(xAxis+15*columnWidth, yAxis," - ");
         SimbleeForMobile.drawText(xAxis+22*columnWidth, yAxis,FRAMread16(pointer+HOURLYCOUNTOFFSET));
         SimbleeForMobile.drawText(xAxis+34*columnWidth, yAxis,"  -  ");
-        snprintf(battBuffer, 4,"%u%%",FRAMread8(pointer+HOURLYBATTOFFSET));   // Puts % next to batt from 0-100
+        snprintf(battBuffer, 5,"%u%%",FRAMread8(pointer+HOURLYBATTOFFSET));   // Puts % next to batt from 0-100
         SimbleeForMobile.drawText(xAxis+42*columnWidth, yAxis,battBuffer);
     }
     SimbleeForMobile.endScreen();       // So, everything below this is not cached
