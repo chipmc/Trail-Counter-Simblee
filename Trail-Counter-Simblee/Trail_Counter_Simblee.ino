@@ -250,7 +250,7 @@ void setup()
     
     // Set up the Simblee Mobile App
     SimbleeForMobile.deviceName = "Umstead";          // Device name
-    SimbleeForMobile.advertisementData = "Dev";  // Name of data service
+    SimbleeForMobile.advertisementData = "Test";  // Name of data service
     SimbleeForMobile.begin();
     
     Serial.println("Ready to go....");
@@ -543,8 +543,6 @@ void createDailyScreen() // This is the screen that displays current status info
             SimbleeForMobile.drawText(xAxis+46*columnWidth, yAxis,"%");
         }
     }
-    SimbleeForMobile.drawText(xAxis,yAxis+rowHeight,"Done");
-    Serial.println("Done");
     SimbleeForMobile.endScreen();       // So, everything below this is not cached
 
 
