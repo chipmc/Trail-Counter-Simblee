@@ -73,7 +73,6 @@
 #endif // end IDE
 
 
-
 // Set parameters
 //These defines let me change the memory map without hunting through the whole program
 #define VERSIONNUMBER 7       // Increment this number each time the memory map is changed
@@ -251,7 +250,7 @@ void setup()
     
     // Set up the Simblee Mobile App
     SimbleeForMobile.deviceName = "Umstead";          // Device name
-    SimbleeForMobile.advertisementData = "Test";  // Name of data service
+    SimbleeForMobile.advertisementData = "Dev" ;  // Name of data service
     SimbleeForMobile.begin();
     
     Serial.println("Ready to go....");
