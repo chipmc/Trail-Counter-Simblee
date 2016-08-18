@@ -76,7 +76,6 @@
 // Set parameters
 //These defines let me change the memory map without hunting through the whole program
 #define VERSIONNUMBER 7       // Increment this number each time the memory map is changed
-#define RELEASENUMBER 1       // Going to try to add a release watermark (integer)
 #define WORDSIZE 8            // For the Word size
 #define PAGESIZE 4096         // Memory size in bytes / word size - 256kb FRAM
 // First Word - 8 bytes for setting global values
@@ -165,9 +164,20 @@ int lastHour = 0;  // For recording the startup values
 int lastDate = 0;   // For providing dat break counts
 unsigned int hourlyPersonCount = 0;  // hourly counter
 unsigned int dailyPersonCount = 0;   //  daily counter
+// Interface vairables
+unsigned int lastupdate = 0;    // For when we are on the current screen
+int updateFrequency = 1000;     // How often will we update the current screen
+int adminAccessKey = 27617;     // This is the code you need to enter to get to the admin field
+int adminAccessInput = 0;       // This is the user's input
+
+boolean adminUnlocked = false;  // Start with the Admin tab locked
+const char* releaseNumber = "1.1";
+
+
 
 // Variables for Simblee Display
-uint8_t ui_RefreshButton;   // Refrsh button ID on Current Tab
+uint8_t ui_adminLockIcon;       // Shows whether the admin tab is unlocked
+uint8_t ui_adminAccessField;    // Where the Admin access code is entered
 uint8_t ui_StartStopSwitch; // Start stop button ID on Admin Tab
 uint8_t ui_StartStopStatus; // Text field ID for start stop status on Admin Tab
 uint8_t ui_EraseMemSwitch; // Erase Memory button ID on Admin Tab
@@ -273,7 +283,17 @@ void loop()
             Simblee_pinWakeCallback(20, LOW, wakeUpAlarm); // configures pin 20 to wake up device on a Low signal
             Simblee_systemOff();  // Very low power - only comes back with interrupt
         }
-
+    }
+    if (SimbleeForMobile.connected && SimbleeForMobile.screen == 1)
+    {
+        if (millis() >= lastupdate + updateFrequency)
+        {
+            lastupdate = millis();
+            if (SimbleeForMobile.updatable)
+            {
+                updateCurrentScreen();
+            }
+        }
     }
 }
 
@@ -286,12 +306,14 @@ int wakeUpAlarm(uint32_t dummyButton)  // Function to let us know we are waking 
 void SimbleeForMobile_onConnect()   // Actions to take once we get connected.
 {
     currentScreen = -1;     // Reset the current screen to non being displayed
+
 }
 
 
 void SimbleeForMobile_onDisconnect()    // Can clean up resources once we disconnect
 {
-    // Not sure how best to use this but will leave in case I come up with something
+    adminUnlocked = false;      // Clear the Admin Unlock values on disconnect
+    adminAccessInput = 0;
 }
 
 void ui()   // The function that defines the iPhone UI
@@ -334,29 +356,44 @@ void ui()   // The function that defines the iPhone UI
 void ui_event(event_t &event)   // This is where we define the actions to occur on UI events
 {
     printEvent(event);
-    if (event.id == ui_RefreshButton && event.type == EVENT_RELEASE)       // Releasing the Refresh button on the Current screen
-    {                                                                      // Updates all the fields
-        updateCurrentScreen();
-    }
-    else if (event.id == menuBar)                                          // This is the event handler for the menu bar
+    if (event.id == menuBar)                                          // This is the event handler for the menu bar
     {
         switch(event.value)
         {
-            case 0:
+            case 0: // This is the current tab
                 SimbleeForMobile.showScreen(1);
                 break;
                 
-            case 1:
+            case 1: // This is the Daily Tab
                 SimbleeForMobile.showScreen(2);
                 break;
                 
-            case 2:
+            case 2: // This is the Hourly Tab
                 SimbleeForMobile.showScreen(3);
                 break;
                 
-            case 3:
-                SimbleeForMobile.showScreen(4);
+            case 3: // This is the Admin Tab
+                if (adminUnlocked) SimbleeForMobile.showScreen(4);
+                else if (currentScreen == 1) SimbleeForMobile.updateValue(menuBar, 0);
+                else SimbleeForMobile.showScreen(1);
                 break;
+        }
+    }
+    else if (event.id == ui_adminAccessField)   // Where you enter the Admin code
+    {
+        adminAccessInput = event.value;
+        if (adminAccessInput == adminAccessKey)
+        {
+            SimbleeForMobile.updateColor(ui_adminLockIcon,GREEN);
+            adminUnlocked = true;
+        }
+        else if (adminAccessInput != adminAccessKey)
+        {
+            adminAccessInput = 0;
+            SimbleeForMobile.updateValue(ui_adminAccessField,0);
+            SimbleeForMobile.updateColor(ui_adminLockIcon,RED);
+            adminUnlocked = false;
+            
         }
     }
     else if (event.id == ui_LEDswitch) // LED on off switch on the Current Status Screen
@@ -461,22 +498,23 @@ void createCurrentScreen() // This is the screen that displays current status in
     SimbleeForMobile.updateValue(menuBar, 0);
 
     // all we are doing here is laying out the screen - updates are in a separate function
-    dateTimeField = SimbleeForMobile.drawText(50, 140, " ");
-    SimbleeForMobile.drawText(50, 160, "Hourly Count:");
-    hourlyField = SimbleeForMobile.drawText(210,160," ");
-    SimbleeForMobile.drawText(50, 180, "Daily Count:");
-    dailyField =   SimbleeForMobile.drawText(210,180," ");
-    SimbleeForMobile.drawText(50, 200, "State of Charge:");
-    chargeField = SimbleeForMobile.drawText(210,200," ");
-    SimbleeForMobile.drawText(50, 220, "Counter Status:");
-    ui_StartStopStatus = SimbleeForMobile.drawText(210, 220, " ");
-    ui_RefreshButton = SimbleeForMobile.drawButton(110, 260, 90, "Refresh");    // we need a Refresh Button for subsequent updates
-    SimbleeForMobile.setEvents(ui_RefreshButton, EVENT_RELEASE);
-    SimbleeForMobile.drawText(50,355, "Indicators: Off-On");
-    ui_LEDswitch = SimbleeForMobile.drawSwitch(210,350);
+    dateTimeField = SimbleeForMobile.drawText(40, 140, " ");
+    SimbleeForMobile.drawText(40, 160, "Hourly Count:");
+    hourlyField = SimbleeForMobile.drawText(200,160," ");
+    SimbleeForMobile.drawText(40, 180, "Daily Count:");
+    dailyField =   SimbleeForMobile.drawText(200,180," ");
+    SimbleeForMobile.drawText(40, 200, "State of Charge:");
+    chargeField = SimbleeForMobile.drawText(200,200," ");
+    SimbleeForMobile.drawText(40, 220, "Counter Status:");
+    ui_StartStopStatus = SimbleeForMobile.drawText(200, 220, " ");
+    SimbleeForMobile.drawText(40,290,"Admin Tab Code:");
+    ui_adminAccessField = SimbleeForMobile.drawTextField(165,285,80,adminAccessInput);
+    ui_adminLockIcon = SimbleeForMobile.drawRect(260,290,20,20,RED);
+    SimbleeForMobile.drawText(40,356, "Indicator Lights:");
+    ui_LEDswitch = SimbleeForMobile.drawSwitch(170,350);
     SimbleeForMobile.setEvents(ui_LEDswitch,EVENT_PRESS);
     SimbleeForMobile.drawText(10,(SimbleeForMobile.screenHeight-20),"Version:");
-    SimbleeForMobile.drawText(80,(SimbleeForMobile.screenHeight-20),RELEASENUMBER);
+    SimbleeForMobile.drawText(80,(SimbleeForMobile.screenHeight-20),releaseNumber);
     SimbleeForMobile.endScreen();
 }
 
@@ -508,6 +546,11 @@ void updateCurrentScreen() // Since we have to update this screen three ways: cr
     }
     else SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
     
+    if (adminUnlocked) {
+        SimbleeForMobile.updateValue(ui_adminAccessField,adminAccessInput);
+        SimbleeForMobile.updateColor(ui_adminLockIcon,GREEN);
+    }
+    
     if ((controlRegisterValue & toggleLEDs) >> 3) {    // Show the state of the LED switch
         SimbleeForMobile.updateValue(ui_LEDswitch,1);
     }
@@ -533,6 +576,7 @@ void createDailyScreen() // This is the screen that displays current status info
     SimbleeForMobile.drawText(xAxis+41*columnWidth, yAxis,"Batt %");
     SimbleeForMobile.endScreen();       // So, everything below this is not cached
     
+
     for (int i=0; i < DAILYCOUNTNUMBER; i++) {
         int pointer = (DAILYOFFSET + (i+FRAMread8(DAILYPOINTERADDR)) % DAILYCOUNTNUMBER)*WORDSIZE;
         dailyCount = FRAMread16(pointer+DAILYCOUNTOFFSET);
@@ -549,9 +593,6 @@ void createDailyScreen() // This is the screen that displays current status info
         }
     }
     SimbleeForMobile.endScreen();       // So, everything below this is not cached
-
-
-
 }
 
 void createHourlyScreen() // This is the screen that displays today's hourly counts
@@ -579,7 +620,7 @@ void createHourlyScreen() // This is the screen that displays today's hourly cou
     SimbleeForMobile.drawText(xAxis+41*columnWidth, yAxis,"Batt %");
     SimbleeForMobile.endScreen();       // So, everything below this is not cached
     
-    
+
     for (int i=1; i <= 24; i++) {           // The most hours we can have in a day is 24 - right?
         hourIndex = (hourIndex ? hourIndex : HOURLYCOUNTNUMBER) -1; // Modeled on i = (i ? i : range) - 1;
         int pointer = (HOURLYOFFSET + hourIndex) * WORDSIZE;
@@ -598,7 +639,6 @@ void createHourlyScreen() // This is the screen that displays today's hourly cou
         SimbleeForMobile.drawText(xAxis+42*columnWidth, yAxis,battBuffer);
     }
     SimbleeForMobile.endScreen();       // So, everything below this is not cached
-
 }
 
 
@@ -674,6 +714,7 @@ void printEvent(event_t &event)     // Utility method to print information regar
         case 6: Serial.print("the Debounce slider");    break;
         case 8: Serial.print("the Sensitivity slider"); break;
         case 10:Serial.print("the Refresh button");     break;
+        case 11:Serial.print("the Admin Code field");   break;
         case 12:Serial.print("the LED on-off switch");  break;
         case 21:Serial.print("the Update button");      break;
         default:
