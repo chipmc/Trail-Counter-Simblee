@@ -112,11 +112,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "FRAMcommon.h"     // Where I put all the common FRAM read and write extensions
+#include "SimbleeForMobileClient.h"
+#include "SimbleeCloud.h"
 
 
 // Prototypes
 // Prototypes From the included libraries
 MAX17043 batteryMonitor;                      // Init the Fuel Gauge
+SimbleeForMobileClient client;
+SimbleeCloud cloud(&client);
 
 
 
@@ -171,9 +175,7 @@ int adminAccessKey = 27617;     // This is the code you need to enter to get to 
 int adminAccessInput = 0;       // This is the user's input
 
 boolean adminUnlocked = false;  // Start with the Admin tab locked
-const char* releaseNumber = "1.1";
-
-
+const char* releaseNumber = "1.2";
 
 // Variables for Simblee Display
 uint8_t ui_adminLockIcon;       // Shows whether the admin tab is unlocked
@@ -197,6 +199,11 @@ int currentScreen; // The ID of the current screen being displayed
 uint8_t ui_setYear, ui_setMonth,ui_setDay,ui_setHour,ui_setMinute,ui_setSecond; // Element which displays date and time values on Admin Tab
 uint8_t ui_hourStepper, ui_minStepper, ui_secStepper, ui_yearStepper, ui_monthStepper, ui_dayStepper;   // Stepper IDs for adjusting on Admin Tab
 
+// Variables for Simblee Cloud
+unsigned int userID = 0xe983942d; //Enter your assigned userID here
+unsigned int destESN = 0x00000001; // This is the destination from the Simblee Cloud Admin Site
+uint8_t ui_sendCloudSwitch;
+
 // Accelerometer Values
 int debounce;               // This is a minimum debounce value - additional debounce set using pot or remote terminal
 int accelInputValue;            // Raw sensitivity input (0-9);
@@ -218,6 +225,8 @@ void setup()
 {
     Wire.beginOnPins(SCLpin,SDApin);  // Not sure if this talks to the i2c bus or not - just to be safe...
     Serial.begin(9600);
+    printf("Module ESN is 0x%08x\n", cloud.myESN);
+    cloud.userID = userID;
     Serial.println("Startup delay...");
     delay(500); // This is to make sure that the Arduino boots first as it initializes the various devices
     
@@ -249,11 +258,11 @@ void setup()
             case 'Y':
                 ResetFRAM();
                 break;
-            case 'N':
-                Serial.println(F("Cannot proceed"));
-                BlinkForever();
+            case 'y':
+                ResetFRAM();
                 break;
             default:
+                Serial.println(F("Cannot proceed"));
                 BlinkForever();
         }
     }
@@ -270,18 +279,30 @@ void setup()
 void loop()
 {
     SimbleeForMobile.process(); // process must be called in the loop for SimbleeForMobile
+    cloud.process();            // process must be called in the loop for Simblee Cloud
     if (alarmInterrupt)
     {
         delay(100);         // Keeps us from hammering the i2c bus
         alarmInterrupt = false;
         TakeTheBus();
-            t = RTC.get();
+            t = RTC.get();      // We will check the time to make sure it is the evening alarm
+            stateOfCharge = batteryMonitor.getSoC();    // Then we will check the battery
         GiveUpTheBus();
-        if (hour(t) > 20) {     // Only going to sleep at night
+        if (hour(t) == 22) {     // Only going to sleep at night - Requires a 10PM alarm
             Serial.println("Going to Sleep");
             delay(1000);
-            Simblee_pinWakeCallback(20, LOW, wakeUpAlarm); // configures pin 20 to wake up device on a Low signal
-            Simblee_systemOff();  // Very low power - only comes back with interrupt
+            if (stateOfCharge > 75)
+            {
+                Simblee_ULPDelay(HOURS(8)); // Sleeps until 6am if the battery is 75% charged
+            }
+            else
+            {
+                Simblee_ULPDelay(HOURS(14)); // Sleeps until noon if the battery is less than 75% charged
+            }
+
+            // If we want to wake on a pin interrupt - these are the lines of code
+            // Simblee_pinWakeCallback(20, LOW, wakeUpAlarm); // configures pin 20 to wake up device on a Low signal
+            // Simblee_systemOff();  // Very low power - only comes back with interrupt
         }
     }
     if (SimbleeForMobile.connected && SimbleeForMobile.screen == 1)
@@ -402,6 +423,32 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // Toggle the LED bit
         Serial.println("Toggled the LED bit");
     }
+    else if (evnt.id == ui_sendCloudSwitch)
+    {
+        if(cloud.connect())
+        {
+            Serial.println("Simblee Cloud Connected");
+        }
+        else Serial.println("Simblee Cloud Not Connected");
+        if (cloud.active())
+        {
+            // send start message (ie: start the timer on the receiving side)
+            cloud.send(destESN, "S", 1);
+            
+            for (int i = 1; i < 5; i++)
+            {
+                // send a '1' message
+                cloud.send(destESN, "1", 1);
+                // send a '0' message
+                cloud.send(destESN, "0", 1);
+            }
+            
+            // send end message (ie: stop the timer on the receiving side)
+            cloud.send(destESN, "E", 1);
+            Serial.println("Cloud data sent");
+        }
+        else Serial.println("Simblee Cloud not Active - no data sent");
+    }
     else if (event.id == ui_StartStopSwitch && event.type == EVENT_RELEASE) // Start / Stop Button handler from the Admin screen
     {
         controlRegisterValue = FRAMread8(CONTROLREGISTER);
@@ -507,12 +554,14 @@ void createCurrentScreen() // This is the screen that displays current status in
     chargeField = SimbleeForMobile.drawText(200,200," ");
     SimbleeForMobile.drawText(40, 220, "Counter Status:");
     ui_StartStopStatus = SimbleeForMobile.drawText(200, 220, " ");
-    SimbleeForMobile.drawText(40,290,"Admin Tab Code:");
-    ui_adminAccessField = SimbleeForMobile.drawTextField(165,285,80,adminAccessInput);
-    ui_adminLockIcon = SimbleeForMobile.drawRect(260,290,20,20,RED);
+    SimbleeForMobile.drawText(40,290,"Admin Code:");
+    ui_adminAccessField = SimbleeForMobile.drawTextField(132,285,80,adminAccessInput);
+    ui_adminLockIcon = SimbleeForMobile.drawRect(220,290,20,20,RED);
     SimbleeForMobile.drawText(40,356, "Indicator Lights:");
     ui_LEDswitch = SimbleeForMobile.drawSwitch(170,350);
     SimbleeForMobile.setEvents(ui_LEDswitch,EVENT_PRESS);
+    ui_sendCloudSwitch = SimbleeForMobile.drawSwitch(170,400);
+    SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
     SimbleeForMobile.drawText(10,(SimbleeForMobile.screenHeight-20),"Version:");
     SimbleeForMobile.drawText(80,(SimbleeForMobile.screenHeight-20),releaseNumber);
     SimbleeForMobile.endScreen();
@@ -530,13 +579,26 @@ void updateCurrentScreen() // Since we have to update this screen three ways: cr
     toArduinoTime(t);  // Update Time Field on screen and in the console
     Serial.println("");
     
-    if (stateOfCharge >= 105) {         // Update the value of the state of charge field
+    if (stateOfCharge >= 105)   // Update the value and color of the state of charge field
+    {
         SimbleeForMobile.drawText(210,200,"Error");
+    }
+    else if (stateOfCharge > 75) {
+        snprintf(battBuffer, 5,"%1.0f%%",stateOfCharge);   // Puts % next to batt from 0-100
+        SimbleeForMobile.updateText(chargeField,battBuffer);
+        SimbleeForMobile.updateColor(chargeField,GREEN);
+    }
+    else if (stateOfCharge > 50) {
+        snprintf(battBuffer, 5,"%1.0f%%",stateOfCharge);   // Puts % next to batt from 0-100
+        SimbleeForMobile.updateText(chargeField,battBuffer);
+        SimbleeForMobile.updateColor(chargeField,YELLOW);
     }
     else {
         snprintf(battBuffer, 5,"%1.0f%%",stateOfCharge);   // Puts % next to batt from 0-100
         SimbleeForMobile.updateText(chargeField,battBuffer);
+        SimbleeForMobile.updateColor(chargeField,RED);
     }
+
     SimbleeForMobile.updateValue(hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR)); // Populate the hourly and daily fields with values
     SimbleeForMobile.updateValue(dailyField, FRAMread16(CURRENTDAILYCOUNTADDR));
     

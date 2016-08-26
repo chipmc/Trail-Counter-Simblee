@@ -21,7 +21,7 @@
 # List application Arduino/chipKIT/Digispark/Energia/Maple/Microduino/Teensy/Wiring libraries here
 # default = 0 = none
 #
-APP_LIBS_LIST = Wire SimbleeForMobile
+APP_LIBS_LIST = Wire SimbleeForMobile SimbleeForMobileClient SimbleeCloud
 
 # List user's libraries here 
 # default = 0 = none
@@ -138,6 +138,32 @@ MAKEFILE_PATH  = $(CURRENT_DIR)/Makefiles
 UTILITIES_PATH = $(CURRENT_DIR)/Utilities
 
 include $(MAKEFILE_PATH)/Step1.mk
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
