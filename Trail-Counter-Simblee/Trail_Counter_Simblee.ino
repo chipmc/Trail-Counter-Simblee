@@ -291,6 +291,7 @@ void loop()
         if (hour(t) == 22) {     // Only going to sleep at night - Requires a 10PM alarm
             Serial.println("Going to Sleep");
             delay(1000);
+        
             if (stateOfCharge > 75)
             {
                 Simblee_ULPDelay(HOURS(8)); // Sleeps until 6am if the battery is 75% charged
@@ -299,7 +300,6 @@ void loop()
             {
                 Simblee_ULPDelay(HOURS(14)); // Sleeps until noon if the battery is less than 75% charged
             }
-
             // If we want to wake on a pin interrupt - these are the lines of code
             // Simblee_pinWakeCallback(20, LOW, wakeUpAlarm); // configures pin 20 to wake up device on a Low signal
             // Simblee_systemOff();  // Very low power - only comes back with interrupt
@@ -335,6 +335,11 @@ void SimbleeForMobile_onDisconnect()    // Can clean up resources once we discon
 {
     adminUnlocked = false;      // Clear the Admin Unlock values on disconnect
     adminAccessInput = 0;
+    controlRegisterValue = FRAMread8(CONTROLREGISTER);
+    if (toggleLEDs & controlRegisterValue == 8)       // Check to see if the LED bit is set on
+    {
+        FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // If so, it will turn off the LED
+    }
 }
 
 void ui()   // The function that defines the iPhone UI
@@ -423,7 +428,7 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // Toggle the LED bit
         Serial.println("Toggled the LED bit");
     }
-    else if (evnt.id == ui_sendCloudSwitch)
+     else if (event.id == ui_sendCloudSwitch)
     {
         if(cloud.connect())
         {
@@ -554,13 +559,12 @@ void createCurrentScreen() // This is the screen that displays current status in
     chargeField = SimbleeForMobile.drawText(200,200," ");
     SimbleeForMobile.drawText(40, 220, "Counter Status:");
     ui_StartStopStatus = SimbleeForMobile.drawText(200, 220, " ");
-    SimbleeForMobile.drawText(40,290,"Admin Code:");
+    ui_adminLockIcon = SimbleeForMobile.drawText(40,290,"Admin Code:",RED);
     ui_adminAccessField = SimbleeForMobile.drawTextField(132,285,80,adminAccessInput);
-    ui_adminLockIcon = SimbleeForMobile.drawRect(220,290,20,20,RED);
     SimbleeForMobile.drawText(40,356, "Indicator Lights:");
     ui_LEDswitch = SimbleeForMobile.drawSwitch(170,350);
     SimbleeForMobile.setEvents(ui_LEDswitch,EVENT_PRESS);
-    ui_sendCloudSwitch = SimbleeForMobile.drawSwitch(170,400);
+    ui_sendCloudSwitch = SimbleeForMobile.drawButton(70,400,150,"Send to Cloud");
     SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
     SimbleeForMobile.drawText(10,(SimbleeForMobile.screenHeight-20),"Version:");
     SimbleeForMobile.drawText(80,(SimbleeForMobile.screenHeight-20),releaseNumber);
@@ -591,7 +595,7 @@ void updateCurrentScreen() // Since we have to update this screen three ways: cr
     else if (stateOfCharge > 50) {
         snprintf(battBuffer, 5,"%1.0f%%",stateOfCharge);   // Puts % next to batt from 0-100
         SimbleeForMobile.updateText(chargeField,battBuffer);
-        SimbleeForMobile.updateColor(chargeField,YELLOW);
+        SimbleeForMobile.updateColor(chargeField,MAGENTA);
     }
     else {
         snprintf(battBuffer, 5,"%1.0f%%",stateOfCharge);   // Puts % next to batt from 0-100
