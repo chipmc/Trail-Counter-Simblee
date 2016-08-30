@@ -175,7 +175,7 @@ int adminAccessKey = 27617;     // This is the code you need to enter to get to 
 int adminAccessInput = 0;       // This is the user's input
 
 boolean adminUnlocked = false;  // Start with the Admin tab locked
-const char* releaseNumber = "1.2";
+const char* releaseNumber = "1.21";
 
 // Variables for Simblee Display
 uint8_t ui_adminLockIcon;       // Shows whether the admin tab is unlocked
@@ -210,11 +210,12 @@ int accelInputValue;            // Raw sensitivity input (0-9);
 byte accelSensitivity;               // Hex variable for sensitivity
 
 // Variables for the control byte
-// Control Register  (8 - 5 Reserved, 4- LEDs, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
+// Control Register  (8 - 6 Reserved, 5-Clear Counts, 4-Toggle LEDs, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
 byte signalDebounceChange = B0000001;  // Mask for accessing the debounce bit
 byte signalSentitivityChange = B00000010;   // Mask for accessing the sensitivity bit
 byte toggleStartStop = B00000100;   // Mask for accessing the start / stop bit
 byte toggleLEDs = B00001000;        // Mask for accessing the LED on off bit
+byte signalClearCounts = B00010000; // Flag to have the Arduino clear current counts
 byte controlRegisterValue;  // Current value of the control register
 
 // include newlib printf float support (%f used in sprintf below)
@@ -468,6 +469,9 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         SimbleeForMobile.updateText(ui_EraseMemStatus,"Started");
         ResetFRAM();
         SimbleeForMobile.updateText(ui_EraseMemStatus,"Erased");
+        controlRegisterValue = FRAMread8(CONTROLREGISTER);
+        FRAMwrite8(CONTROLREGISTER,signalClearCounts ^ controlRegisterValue);  // Toggle the start stop bit
+        
     }
     else if (event.id == ui_DebounceSlider && event.type == EVENT_RELEASE) // Moving the debounce slider on the Admin Tab
     {
