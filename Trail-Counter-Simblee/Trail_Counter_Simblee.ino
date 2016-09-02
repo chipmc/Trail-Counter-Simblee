@@ -175,7 +175,7 @@ int adminAccessKey = 27617;     // This is the code you need to enter to get to 
 int adminAccessInput = 0;       // This is the user's input
 
 boolean adminUnlocked = false;  // Start with the Admin tab locked
-const char* releaseNumber = "1.21";
+const char* releaseNumber = "1.22";
 
 // Variables for Simblee Display
 uint8_t ui_adminLockIcon;       // Shows whether the admin tab is unlocked
@@ -186,6 +186,8 @@ uint8_t ui_EraseMemSwitch; // Erase Memory button ID on Admin Tab
 uint8_t ui_EraseMemStatus; // Text field ID for Erase Memory status on Admin Tab
 uint8_t ui_DebounceSlider;  // Slider ID for adjusting debounce on Admin Tab
 uint8_t ui_SensitivitySlider;   // Slider ID for adjusting sensitivity on Admin Tab
+uint8_t ui_SensitivityValue;    // Provide clear value of the sensitivity
+uint8_t ui_DebounceValue;       // Provide a clear value of the debounce setting
 uint8_t ui_LEDswitch;   // Used to turn on and off the LEDs
 uint8_t ui_UpdateButton;  // Update button ID on Admin Tab
 uint8_t dateTimeField;  // Text field on Current Tab
@@ -370,8 +372,10 @@ void ui()   // The function that defines the iPhone UI
             else SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
             debounce = FRAMread16(DEBOUNCEADDR);
             SimbleeForMobile.updateValue(ui_DebounceSlider, debounce);
+            SimbleeForMobile.updateValue(ui_DebounceValue,debounce);
             accelInputValue = FRAMread8(SENSITIVITYADDR);
-            SimbleeForMobile.updateValue(ui_SensitivitySlider, accelInputValue);
+            SimbleeForMobile.updateValue(ui_SensitivitySlider, 10*accelInputValue);
+            SimbleeForMobile.updateValue(ui_SensitivityValue, accelInputValue);
             break;
             
         default:
@@ -429,7 +433,8 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // Toggle the LED bit
         Serial.println("Toggled the LED bit");
     }
-     else if (event.id == ui_sendCloudSwitch)
+    /*
+    else if (event.id == ui_sendCloudSwitch)
     {
         if(cloud.connect())
         {
@@ -455,6 +460,7 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         }
         else Serial.println("Simblee Cloud not Active - no data sent");
     }
+    */
     else if (event.id == ui_StartStopSwitch && event.type == EVENT_RELEASE) // Start / Stop Button handler from the Admin screen
     {
         controlRegisterValue = FRAMread8(CONTROLREGISTER);
@@ -473,13 +479,15 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         FRAMwrite8(CONTROLREGISTER,signalClearCounts ^ controlRegisterValue);  // Toggle the start stop bit
         
     }
-    else if (event.id == ui_DebounceSlider && event.type == EVENT_RELEASE) // Moving the debounce slider on the Admin Tab
+    else if (event.id == ui_DebounceSlider) // Moving the debounce slider on the Admin Tab
     {
         debounce = event.value;
+        SimbleeForMobile.updateValue(ui_DebounceValue,debounce);
     }
-    else if (event.id == ui_SensitivitySlider && event.type == EVENT_RELEASE)  // Moving the sensitivity  slider on the Admin Tab
+    else if (event.id == ui_SensitivitySlider)  // Moving the sensitivity  slider on the Admin Tab
     {
-        accelInputValue = event.value;
+        accelInputValue = int(event.value/10);
+        SimbleeForMobile.updateValue(ui_SensitivityValue,accelInputValue);
     }
     else if (event.id == ui_UpdateButton && event.type == EVENT_RELEASE)  // A bit more complicated - Update botton event on Admin Tab
     {
@@ -568,8 +576,8 @@ void createCurrentScreen() // This is the screen that displays current status in
     SimbleeForMobile.drawText(40,356, "Indicator Lights:");
     ui_LEDswitch = SimbleeForMobile.drawSwitch(170,350);
     SimbleeForMobile.setEvents(ui_LEDswitch,EVENT_PRESS);
-    ui_sendCloudSwitch = SimbleeForMobile.drawButton(70,400,150,"Send to Cloud");
-    SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
+    //ui_sendCloudSwitch = SimbleeForMobile.drawButton(70,400,150,"Send to Cloud");
+    //SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
     SimbleeForMobile.drawText(10,(SimbleeForMobile.screenHeight-20),"Version:");
     SimbleeForMobile.drawText(80,(SimbleeForMobile.screenHeight-20),releaseNumber);
     SimbleeForMobile.endScreen();
@@ -731,11 +739,13 @@ void createAdminScreen() // This is the screen that displays current status info
     ui_StartStopSwitch = SimbleeForMobile.drawButton(60,180,120, "Start/Stop");
     SimbleeForMobile.setEvents(ui_StartStopSwitch, EVENT_RELEASE);
     
-    SimbleeForMobile.drawText(20,240,"0 sec          Debounce           1 sec");
+    SimbleeForMobile.drawText(20,240,"Debounce: ");
+    ui_DebounceValue = SimbleeForMobile.drawText(100,240,"");
     ui_DebounceSlider = SimbleeForMobile.drawSlider(20,260,270,0,1000);
  
-    SimbleeForMobile.drawText(20,300,"Max            Sensitivity           Min");
-    ui_SensitivitySlider = SimbleeForMobile.drawSlider(20,320,270,0,16);
+    SimbleeForMobile.drawText(20,300,"Sensitivity:");
+    ui_SensitivityValue =  SimbleeForMobile.drawText(100,300,"");
+    ui_SensitivitySlider = SimbleeForMobile.drawSlider(20,320,270,0,100);
 
     //SimbleeForMobile.drawText(20,340,"Set Date");
     ui_setYear = SimbleeForMobile.drawTextField(35,370,60,tm.Year);
