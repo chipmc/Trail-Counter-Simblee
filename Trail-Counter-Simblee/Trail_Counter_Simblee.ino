@@ -69,7 +69,7 @@
 #elif defined(ARDUINO) // Arduino 1.0 and 1.5 specific
     #include "Arduino.h"
 #else // error
-    #   error Platform not defined
+    #error Platform not defined
 #endif // end IDE
 
 
@@ -102,7 +102,6 @@
 
 
 // Include application, user and local libraries
-#include <Arduino.h>
 #include <Wire.h>               //http://arduino.cc/en/Reference/Wire (included with Arduino IDE)
 #include "DS3232RTC.h"          //http://github.com/JChristensen/DS3232RTC
 #include "Time.h"               //http://www.arduino.cc/playground/Code/Time
@@ -175,29 +174,30 @@ int adminAccessKey = 27617;     // This is the code you need to enter to get to 
 int adminAccessInput = 0;       // This is the user's input
 
 boolean adminUnlocked = false;  // Start with the Admin tab locked
-const char* releaseNumber = "1.22";
+const char* releaseNumber = "1.23";
 
 // Variables for Simblee Display
+const char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
+const char *fields[] = { "Hr","Min","Sec","Yr","Mon","Sec"};
+int currentScreen; // The ID of the current screen being displayed
 uint8_t ui_adminLockIcon;       // Shows whether the admin tab is unlocked
 uint8_t ui_adminAccessField;    // Where the Admin access code is entered
 uint8_t ui_StartStopSwitch; // Start stop button ID on Admin Tab
 uint8_t ui_StartStopStatus; // Text field ID for start stop status on Admin Tab
 uint8_t ui_EraseMemSwitch; // Erase Memory button ID on Admin Tab
 uint8_t ui_EraseMemStatus; // Text field ID for Erase Memory status on Admin Tab
-uint8_t ui_DebounceSlider;  // Slider ID for adjusting debounce on Admin Tab
-uint8_t ui_SensitivitySlider;   // Slider ID for adjusting sensitivity on Admin Tab
+uint8_t ui_DebounceStepper;  // Slider ID for adjusting debounce on Admin Tab
+uint8_t ui_SensitivityStepper;   // Slider ID for adjusting sensitivity on Admin Tab
 uint8_t ui_SensitivityValue;    // Provide clear value of the sensitivity
 uint8_t ui_DebounceValue;       // Provide a clear value of the debounce setting
 uint8_t ui_LEDswitch;   // Used to turn on and off the LEDs
 uint8_t ui_UpdateButton;  // Update button ID on Admin Tab
+uint8_t ui_UpdateStatus;    // Indicates if an update is pending
 uint8_t dateTimeField;  // Text field on Current Tab
 uint8_t hourlyField;    // Hour field ID for Houly Tab
 uint8_t dailyField;     // Date feild ID for Hourly Tab
 uint8_t chargeField;    // State of charge field ID on Current Tab
 uint8_t menuBar;        // ID for the tabbed Menu Bar
-const char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
-const char *fields[] = { "Hr","Min","Sec","Yr","Mon","Sec"};
-int currentScreen; // The ID of the current screen being displayed
 uint8_t ui_setYear, ui_setMonth,ui_setDay,ui_setHour,ui_setMinute,ui_setSecond; // Element which displays date and time values on Admin Tab
 uint8_t ui_hourStepper, ui_minStepper, ui_secStepper, ui_yearStepper, ui_monthStepper, ui_dayStepper;   // Stepper IDs for adjusting on Admin Tab
 
@@ -366,15 +366,23 @@ void ui()   // The function that defines the iPhone UI
             
         case 4:
             createAdminScreen(); // Create the current screen
-            if ((controlRegisterValue & toggleStartStop) >> 2) {    // Populate the fields with values
+            if ((controlRegisterValue & toggleStartStop) >> 2) // Populate the fields with values
+            {
                 SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
             }
-            else SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
+            else
+            {
+                SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
+            }
+            // Prepopulate the debounce value
             debounce = FRAMread16(DEBOUNCEADDR);
-            SimbleeForMobile.updateValue(ui_DebounceSlider, debounce);
-            SimbleeForMobile.updateValue(ui_DebounceValue,debounce);
-            accelInputValue = FRAMread8(SENSITIVITYADDR);
-            SimbleeForMobile.updateValue(ui_SensitivitySlider, 10*accelInputValue);
+            SimbleeForMobile.updateValue(ui_DebounceStepper, debounce);
+            char debounceBuffer[5];   // Should be enough for three digits and ms
+            snprintf(debounceBuffer, 6, "%ims",debounce);
+            SimbleeForMobile.updateText(ui_DebounceValue,debounceBuffer);
+            // Prepopulate the sensitivity value (0-10 on the interface but 10-0 into memory
+            accelInputValue = 10 - FRAMread8(SENSITIVITYADDR);  // To a user, increased sensitivity is increased numerical value
+            SimbleeForMobile.updateValue(ui_SensitivityStepper, accelInputValue);
             SimbleeForMobile.updateValue(ui_SensitivityValue, accelInputValue);
             break;
             
@@ -479,15 +487,19 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         FRAMwrite8(CONTROLREGISTER,signalClearCounts ^ controlRegisterValue);  // Toggle the start stop bit
         
     }
-    else if (event.id == ui_DebounceSlider) // Moving the debounce slider on the Admin Tab
+    else if (event.id == ui_DebounceStepper) // Changing the debounce value on the Admin Tab
     {
         debounce = event.value;
-        SimbleeForMobile.updateValue(ui_DebounceValue,debounce);
+        char debounceBuffer[5];   // Should be enough for three digits and ms
+        snprintf(debounceBuffer, 6, "%ims",debounce);
+        SimbleeForMobile.updateText(ui_DebounceValue,debounceBuffer);
+        SimbleeForMobile.updateText(ui_UpdateStatus,"Press \"Update\" to confirm");
     }
-    else if (event.id == ui_SensitivitySlider)  // Moving the sensitivity  slider on the Admin Tab
+    else if (event.id == ui_SensitivityStepper)  // Changing the sensitivity value on the Admin Tab
     {
-        accelInputValue = int(event.value/10);
+        accelInputValue = int(event.value);
         SimbleeForMobile.updateValue(ui_SensitivityValue,accelInputValue);
+        SimbleeForMobile.updateText(ui_UpdateStatus,"Press \"Update\" to confirm");
     }
     else if (event.id == ui_UpdateButton && event.type == EVENT_RELEASE)  // A bit more complicated - Update botton event on Admin Tab
     {
@@ -498,9 +510,9 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
             FRAMwrite8(CONTROLREGISTER,controlRegisterValue);    // Then set the flag so Arduino will apply new setting
             Serial.println("Updating debounce");    // Let the console know
         }
-        if (FRAMread8(SENSITIVITYADDR) != accelInputValue) // Same as debounce above - but now for sensitivity
+        if (FRAMread8(SENSITIVITYADDR) != 10-accelInputValue) // Same as debounce above - but now for sensitivity
         {
-            FRAMwrite8(SENSITIVITYADDR, accelInputValue);
+            FRAMwrite8(SENSITIVITYADDR, 10-accelInputValue);
             controlRegisterValue = signalSentitivityChange ^ controlRegisterValue; // Then set the flag so Arduino will apply new setting
             FRAMwrite8(CONTROLREGISTER,controlRegisterValue);
             Serial.println("Updating sensitivity");
@@ -517,6 +529,7 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         controlRegisterValue = FRAMread8(CONTROLREGISTER);  // Read and display the control register after these updates
         Serial.print("Control Register Value =");
         Serial.println(controlRegisterValue);
+        SimbleeForMobile.updateText(ui_UpdateStatus," ");
     }
     else if (event.id == ui_hourStepper)    // Used to increment / decrement values for setting clock on the Admin Screen
     {
@@ -573,6 +586,8 @@ void createCurrentScreen() // This is the screen that displays current status in
     ui_StartStopStatus = SimbleeForMobile.drawText(200, 220, " ");
     ui_adminLockIcon = SimbleeForMobile.drawText(40,290,"Admin Code:",RED);
     ui_adminAccessField = SimbleeForMobile.drawTextField(132,285,80,adminAccessInput);
+    Serial.print("the ui_adminAccessField = ");
+    Serial.println(ui_adminAccessField);
     SimbleeForMobile.drawText(40,356, "Indicator Lights:");
     ui_LEDswitch = SimbleeForMobile.drawSwitch(170,350);
     SimbleeForMobile.setEvents(ui_LEDswitch,EVENT_PRESS);
@@ -591,9 +606,6 @@ void updateCurrentScreen() // Since we have to update this screen three ways: cr
         t = RTC.get();
         stateOfCharge = batteryMonitor.getSoC();
     GiveUpTheBus();
-    
-    toArduinoTime(t);  // Update Time Field on screen and in the console
-    Serial.println("");
     
     if (stateOfCharge >= 105)   // Update the value and color of the state of charge field
     {
@@ -722,47 +734,54 @@ void createHourlyScreen() // This is the screen that displays today's hourly cou
 
 void createAdminScreen() // This is the screen that displays current status information
 {
+    char debounceBuffer[5];   // Should be enough for three digits and ms
+    
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
     menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(menuBar, 3);
+    
+    SimbleeForMobile.drawRect(10,340,300,140,YELLOW);
 
     // The first control will be a switch
     controlRegisterValue = FRAMread8(CONTROLREGISTER);
 
-    ui_EraseMemStatus = SimbleeForMobile.drawText(190, 140, " ");
-    
-    ui_EraseMemSwitch = SimbleeForMobile.drawButton(60,130,120, "Reset Mem",RED);
+    ui_EraseMemStatus = SimbleeForMobile.drawText(50, 130, " ");
+    ui_EraseMemSwitch = SimbleeForMobile.drawButton(20,150,110, "Reset Mem",RED);
     SimbleeForMobile.setEvents(ui_EraseMemSwitch, EVENT_RELEASE);
     
-    ui_StartStopStatus = SimbleeForMobile.drawText(190, 190, " ");
-
-    ui_StartStopSwitch = SimbleeForMobile.drawButton(60,180,120, "Start/Stop");
+    ui_StartStopStatus = SimbleeForMobile.drawText(200, 130, " ");
+    ui_StartStopSwitch = SimbleeForMobile.drawButton(180,150,110, "Start/Stop");
     SimbleeForMobile.setEvents(ui_StartStopSwitch, EVENT_RELEASE);
     
-    SimbleeForMobile.drawText(20,240,"Debounce: ");
-    ui_DebounceValue = SimbleeForMobile.drawText(100,240,"");
-    ui_DebounceSlider = SimbleeForMobile.drawSlider(20,260,270,0,1000);
- 
-    SimbleeForMobile.drawText(20,300,"Sensitivity:");
-    ui_SensitivityValue =  SimbleeForMobile.drawText(100,300,"");
-    ui_SensitivitySlider = SimbleeForMobile.drawSlider(20,320,270,0,100);
+    SimbleeForMobile.drawText(20,240,"Debounce:");
+    ui_DebounceValue = SimbleeForMobile.drawText(50,260,"");
+    ui_DebounceStepper = SimbleeForMobile.drawStepper(20,280,20,0,500);
 
+ 
+    SimbleeForMobile.drawText(160,240,"Sensitivity:");
+    ui_SensitivityValue =  SimbleeForMobile.drawText(220,260,"");
+    ui_SensitivityStepper = SimbleeForMobile.drawStepper(180,280,20,0,10);
+    Serial.print("the ui_SensitivityStepper = ");
+    Serial.println(ui_SensitivityStepper);
+
+    
+    SimbleeForMobile.drawText(100,350,"Set Time and Date");
     //SimbleeForMobile.drawText(20,340,"Set Date");
-    ui_setYear = SimbleeForMobile.drawTextField(35,370,60,tm.Year);
-    ui_setMonth = SimbleeForMobile.drawTextField(135,370,45,tm.Month);
-    ui_setDay = SimbleeForMobile.drawTextField(240,370,40,tm.Day);
+    ui_setYear = SimbleeForMobile.drawText(35,370,60,tm.Year);
+    ui_setMonth = SimbleeForMobile.drawText(140,370,45,tm.Month);
+    ui_setDay = SimbleeForMobile.drawText(240,370,40,tm.Day);
 
     //SimbleeForMobile.drawText(20,400,"Set Time");
-    ui_setHour = SimbleeForMobile.drawTextField(40,430,40,tm.Hour);
-    ui_setMinute = SimbleeForMobile.drawTextField(135,430,45,tm.Minute);
-    ui_setSecond = SimbleeForMobile.drawTextField(230,430,40,tm.Second);
+    ui_setHour = SimbleeForMobile.drawText(40,420,40,tm.Hour);
+    ui_setMinute = SimbleeForMobile.drawText(140,420,45,tm.Minute);
+    ui_setSecond = SimbleeForMobile.drawText(240,420,40,tm.Second);
 
-    ui_hourStepper = SimbleeForMobile.drawStepper(15,460,20,0,24);
-    ui_minStepper = SimbleeForMobile.drawStepper(110,460,20,0,60);
-    ui_secStepper = SimbleeForMobile.drawStepper(205,460,20,0,60);
-    ui_yearStepper = SimbleeForMobile.drawStepper(15,400,20,2016,2017);
-    ui_monthStepper = SimbleeForMobile.drawStepper(110,400,20,1,12);
-    ui_dayStepper = SimbleeForMobile.drawStepper(205,400,20,1,31);
+    ui_hourStepper = SimbleeForMobile.drawStepper(15,440,20,0,24);
+    ui_minStepper = SimbleeForMobile.drawStepper(110,440,20,0,60);
+    ui_secStepper = SimbleeForMobile.drawStepper(205,440,20,0,60);
+    ui_yearStepper = SimbleeForMobile.drawStepper(15,390,20,2016,2017);
+    ui_monthStepper = SimbleeForMobile.drawStepper(110,390,20,1,12);
+    ui_dayStepper = SimbleeForMobile.drawStepper(205,390,20,1,31);
     
     SimbleeForMobile.updateText(ui_setHour,"HH");
     SimbleeForMobile.updateText(ui_setMinute,"MM");
@@ -771,10 +790,42 @@ void createAdminScreen() // This is the screen that displays current status info
     SimbleeForMobile.updateText(ui_setMonth,"MM");
     SimbleeForMobile.updateText(ui_setDay,"DD");
     
-    ui_UpdateButton = SimbleeForMobile.drawButton(100,510,120, "Update");
+    ui_UpdateStatus = SimbleeForMobile.drawText(75,535," ");
+    ui_UpdateButton = SimbleeForMobile.drawButton(100,500,120, "Update");
     SimbleeForMobile.setEvents(ui_UpdateButton, EVENT_RELEASE);
     
     SimbleeForMobile.endScreen();
+    
+    Serial.print( ui_adminLockIcon); Serial.print(",");       // Shows whether the admin tab is unlocked
+    Serial.print( ui_adminAccessField); Serial.print(",");    // Where the Admin access code is entered
+    Serial.print( ui_StartStopSwitch); Serial.print(","); // Start stop button ID on Admin Tab
+    Serial.print( ui_StartStopStatus); Serial.print(","); // Text field ID for start stop status on Admin Tab
+    Serial.print( ui_EraseMemSwitch); Serial.print(","); // Erase Memory button ID on Admin Tab
+    Serial.print( ui_EraseMemStatus); Serial.print(","); // Text field ID for Erase Memory status on Admin Tab
+    Serial.print( ui_DebounceStepper); Serial.print(",");  // Slider ID for adjusting debounce on Admin Tab
+    Serial.print( ui_SensitivityStepper); Serial.print(",");   // Slider ID for adjusting sensitivity on Admin Tab
+    Serial.print( ui_SensitivityValue); Serial.print(",");    // Provide clear value of the sensitivity
+    Serial.print( ui_DebounceValue); Serial.print(",");       // Provide a clear value of the debounce setting
+    Serial.print( ui_LEDswitch); Serial.print(",");   // Used to turn on and off the LEDs
+    Serial.print( ui_UpdateButton); Serial.print(",");  // Update button ID on Admin Tab
+    Serial.print( ui_UpdateStatus); Serial.print(",");    // Indicates if an update is pending
+    Serial.print( dateTimeField); Serial.print(",");  // Text field on Current Tab
+    Serial.print( hourlyField); Serial.print(",");    // Hour field ID for Houly Tab
+    Serial.print( dailyField); Serial.print(",");     // Date feild ID for Hourly Tab
+    Serial.print( chargeField); Serial.print(",");    // State of charge field ID on Current Tab
+    Serial.print( menuBar); Serial.print(",");        // ID for the tabbed Menu Bar
+    Serial.print( ui_setYear); Serial.print(",");
+    Serial.print(ui_setMonth); Serial.print(",");
+    Serial.print(ui_setDay); Serial.print(",");
+    Serial.print(ui_setHour); Serial.print(",");
+    Serial.print(ui_setMinute); Serial.print(",");
+    Serial.print(ui_setSecond); Serial.print(",");
+    Serial.print( ui_hourStepper); Serial.print(",");
+    Serial.print(ui_minStepper); Serial.print(",");
+    Serial.print(ui_secStepper); Serial.print(",");
+    Serial.print(ui_yearStepper); Serial.print(",");
+    Serial.print(ui_monthStepper); Serial.print(",");
+    Serial.println(ui_dayStepper);
     
 }
 
