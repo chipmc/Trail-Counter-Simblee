@@ -105,6 +105,7 @@
 #include <Wire.h>               //http://arduino.cc/en/Reference/Wire (included with Arduino IDE)
 #include "DS3232RTC.h"          //http://github.com/JChristensen/DS3232RTC
 #include "Time.h"               //http://www.arduino.cc/playground/Code/Time
+#include <Timelib.h>
 #include "MAX17043.h"           // Drives the LiPo Fuel Gauge
 #include "Adafruit_FRAM_I2C.h"   // Note - had to comment out the Wire.begin() in this library
 #include "SimbleeForMobile.h"
