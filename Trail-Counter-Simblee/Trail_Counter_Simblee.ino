@@ -273,7 +273,7 @@ void setup()
     
     // Set up the Simblee Mobile App
     SimbleeForMobile.deviceName = "Umstead";          // Device name
-    SimbleeForMobile.advertisementData = "Dev" ;  // Name of data service
+    SimbleeForMobile.advertisementData = "Spare" ;  // Name of data service
     SimbleeForMobile.begin();
     
     Serial.println("Ready to go....");
@@ -397,8 +397,6 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
 {
     printEvent(event);
     currentScreen = SimbleeForMobile.screen;    // If not, let's capture the current screen number
-    Serial.print("The current screen is: ");
-    Serial.println(currentScreen);
     if (event.id == ui_menuBar)                                          // This is the event handler for the menu bar
     {
         switch(event.value)
@@ -447,6 +445,30 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                 FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // Toggle the LED bit
                 Serial.println("Toggled the LED bit");
             }
+            /*
+            else if (event.id == ui_sendCloudSwitch)
+            {
+                if(cloud.connect())
+                {
+                    Serial.println("Simblee Cloud Connected");
+                }
+                else Serial.println("Simblee Cloud Not Connected");
+                if (cloud.active())
+                {
+                    cloud.send(destESN, "S", 1);    // send start message (ie: start the timer on the receiving side)
+                    for (int i = 1; i < 5; i++)
+                    {
+                        // send a '1' message
+                        cloud.send(destESN, "1", 1);
+                        // send a '0' message
+                        cloud.send(destESN, "0", 1);
+                    }
+                    cloud.send(destESN, "E", 1); // send end message (ie: stop the timer on the receiving side)
+                    Serial.println("Cloud data sent");
+                }
+                else Serial.println("Simblee Cloud not Active - no data sent");
+             }
+             */
 
             break;
         case 2:// The Daily Screen
@@ -502,7 +524,10 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                     FRAMwrite8(SENSITIVITYADDR, 10-accelInputValue);
                     controlRegisterValue = signalSentitivityChange ^ controlRegisterValue; // Then set the flag so Arduino will apply new setting
                     FRAMwrite8(CONTROLREGISTER,controlRegisterValue);
-                    Serial.println("Updating sensitivity");
+                    Serial.print("Updating sensitivity to (");
+                    Serial.print(10-accelInputValue);
+                    Serial.print(") which is displated as sensitivity level ");
+                    Serial.println(accelInputValue);
                 }
                 if (tm.Year >> 0 && tm.Month >> 0 && tm.Day >> 0) // Will only update the update if these values are all non-zero
                 {
@@ -554,35 +579,7 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
     }
     
     
-        /*
-    else if (event.id == ui_sendCloudSwitch)
-    {
-        if(cloud.connect())
-        {
-            Serial.println("Simblee Cloud Connected");
-        }
-        else Serial.println("Simblee Cloud Not Connected");
-        if (cloud.active())
-        {
-            // send start message (ie: start the timer on the receiving side)
-            cloud.send(destESN, "S", 1);
-            
-            for (int i = 1; i < 5; i++)
-            {
-                // send a '1' message
-                cloud.send(destESN, "1", 1);
-                // send a '0' message
-                cloud.send(destESN, "0", 1);
-            }
-            
-            // send end message (ie: stop the timer on the receiving side)
-            cloud.send(destESN, "E", 1);
-            Serial.println("Cloud data sent");
-        }
-        else Serial.println("Simblee Cloud not Active - no data sent");
-    }
-    */
-        controlRegisterValue = FRAMread8(CONTROLREGISTER);
+    controlRegisterValue = FRAMread8(CONTROLREGISTER);
     Serial.print("ControlRegisterValue = ");
     Serial.println(controlRegisterValue);
 }
@@ -606,8 +603,6 @@ void createCurrentScreen() // This is the screen that displays current status in
     ui_StartStopStatus = SimbleeForMobile.drawText(200, 220, " ");
     ui_adminLockIcon = SimbleeForMobile.drawText(40,290,"Admin Code:",RED);
     ui_adminAccessField = SimbleeForMobile.drawTextField(132,285,80,adminAccessInput);
-    Serial.print("the ui_adminAccessField = ");
-    Serial.println(ui_adminAccessField);
     SimbleeForMobile.drawText(40,356, "Indicator Lights:");
     ui_LEDswitch = SimbleeForMobile.drawSwitch(170,350);
     SimbleeForMobile.setEvents(ui_LEDswitch,EVENT_PRESS);
@@ -813,37 +808,6 @@ void createAdminScreen() // This is the screen that displays current status info
     SimbleeForMobile.setEvents(ui_UpdateButton, EVENT_RELEASE);
     
     SimbleeForMobile.endScreen();
-    
-    Serial.print("menuBar ="); Serial.println( ui_menuBar);      // ID for the tabbed Menu Bar
-    Serial.print("dateTimeField ="); Serial.println( ui_dateTimeField);   // Text field on Current Tab
-    Serial.print("EraseMemStatus ="); Serial.println( ui_EraseMemStatus);  // Text field ID for Erase Memory status on Admin Tab
-    Serial.print("EreaseMemSwitch="); Serial.println( ui_EraseMemSwitch);  // Erase Memory button ID on Admin Tab
-    Serial.print("hourlyField ="); Serial.println( ui_hourlyField);   // Hour field ID for Houly Tab
-    Serial.print("StartStopStatus ="); Serial.println( ui_StartStopStatus);// Text field ID for start stop status on Admin Tab
-    Serial.print("dailyField ="); Serial.println( ui_dailyField);     // Date feild ID for Hourly Tab
-    Serial.print("StartStopSwitch = ");Serial.println( ui_StartStopSwitch);  // Start stop button ID on Admin Tab
-    Serial.print("DebounceValue ="); Serial.println( ui_DebounceValue);     // Provide a clear value of the debounce setting
-    Serial.print("chargeField ="); Serial.println( ui_chargeField);    // State of charge field ID on Current Tab
-    Serial.print("DebounceStepper ="); Serial.println( ui_DebounceStepper);  // Slider ID for adjusting debounce on Admin Tab
-    Serial.print("SensitivityValue ="); Serial.println( ui_SensitivityValue);   // Provide clear value of the sensitivity
-    Serial.print("adminLockIcon = ");Serial.println( ui_adminLockIcon);      // Shows whether the admin tab is unlocked
-    Serial.print("adminAccessField = ");  Serial.println( ui_adminAccessField);    // Where the Admin access code is entered
-    Serial.print("SensitivityStepper ="); Serial.println( ui_SensitivityStepper);    // Slider ID for adjusting sensitivity on Admin Tab
-    Serial.print("LEDswitch ="); Serial.println( ui_LEDswitch);   // Used to turn on and off the LEDs
-    Serial.print("setYear ="); Serial.println( ui_setYear);
-    Serial.print("setMonth ="); Serial.println(ui_setMonth);
-    Serial.print("setDay ="); Serial.println(ui_setDay);
-    Serial.print("setHour ="); Serial.println(ui_setHour);
-    Serial.print("setMinute ="); Serial.println(ui_setMinute);
-    Serial.print("setSecond ="); Serial.println(ui_setSecond);
-    Serial.print("hourStepper ="); Serial.println( ui_hourStepper);
-    Serial.print("minStepper ="); Serial.println(ui_minStepper);
-    Serial.print("secStepper ="); Serial.println(ui_secStepper);
-    Serial.print("yearStepper ="); Serial.println(ui_yearStepper);
-    Serial.print("monthStepper ="); Serial.println(ui_monthStepper);
-    Serial.print("dayStepper ="); Serial.println(ui_dayStepper);
-    Serial.print("UpdateButton ="); Serial.println( ui_UpdateButton);   // Update button ID on Admin Tab
-    Serial.print("UpdateStatus ="); Serial.println( ui_UpdateStatus);   // Indicates if an update is pending
     
 }
 
