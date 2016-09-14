@@ -181,31 +181,31 @@ const char* releaseNumber = "1.23";
 const char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
 const char *fields[] = { "Hr","Min","Sec","Yr","Mon","Sec"};
 int currentScreen; // The ID of the current screen being displayed
-uint8_t ui_adminLockIcon;       // Shows whether the admin tab is unlocked
-uint8_t ui_adminAccessField;    // Where the Admin access code is entered
-uint8_t ui_StartStopSwitch; // Start stop button ID on Admin Tab
-uint8_t ui_StartStopStatus; // Text field ID for start stop status on Admin Tab
-uint8_t ui_EraseMemSwitch; // Erase Memory button ID on Admin Tab
-uint8_t ui_EraseMemStatus; // Text field ID for Erase Memory status on Admin Tab
-uint8_t ui_DebounceStepper;  // Slider ID for adjusting debounce on Admin Tab
-uint8_t ui_SensitivityStepper;   // Slider ID for adjusting sensitivity on Admin Tab
-uint8_t ui_SensitivityValue;    // Provide clear value of the sensitivity
-uint8_t ui_DebounceValue;       // Provide a clear value of the debounce setting
-uint8_t ui_LEDswitch;   // Used to turn on and off the LEDs
-uint8_t ui_UpdateButton;  // Update button ID on Admin Tab
-uint8_t ui_UpdateStatus;    // Indicates if an update is pending
-uint8_t dateTimeField;  // Text field on Current Tab
-uint8_t hourlyField;    // Hour field ID for Houly Tab
-uint8_t dailyField;     // Date feild ID for Hourly Tab
-uint8_t chargeField;    // State of charge field ID on Current Tab
-uint8_t menuBar;        // ID for the tabbed Menu Bar
-uint8_t ui_setYear, ui_setMonth,ui_setDay,ui_setHour,ui_setMinute,ui_setSecond; // Element which displays date and time values on Admin Tab
-uint8_t ui_hourStepper, ui_minStepper, ui_secStepper, ui_yearStepper, ui_monthStepper, ui_dayStepper;   // Stepper IDs for adjusting on Admin Tab
+int ui_adminLockIcon;       // Shows whether the admin tab is unlocked
+int ui_adminAccessField;    // Where the Admin access code is entered
+int ui_StartStopSwitch; // Start stop button ID on Admin Tab
+int ui_StartStopStatus; // Text field ID for start stop status on Admin Tab
+int ui_EraseMemSwitch; // Erase Memory button ID on Admin Tab
+int ui_EraseMemStatus; // Text field ID for Erase Memory status on Admin Tab
+int ui_DebounceStepper;  // Slider ID for adjusting debounce on Admin Tab
+int ui_SensitivityStepper;   // Slider ID for adjusting sensitivity on Admin Tab
+int ui_SensitivityValue;    // Provide clear value of the sensitivity
+int ui_DebounceValue;       // Provide a clear value of the debounce setting
+int ui_LEDswitch;   // Used to turn on and off the LEDs
+int ui_UpdateButton;  // Update button ID on Admin Tab
+int ui_UpdateStatus;    // Indicates if an update is pending
+int ui_dateTimeField;  // Text field on Current Tab
+int ui_hourlyField;    // Hour field ID for Houly Tab
+int ui_dailyField;     // Date feild ID for Hourly Tab
+int ui_chargeField;    // State of charge field ID on Current Tab
+int ui_menuBar;        // ID for the tabbed Menu Bar
+int ui_setYear, ui_setMonth,ui_setDay,ui_setHour,ui_setMinute,ui_setSecond; // Element which displays date and time values on Admin Tab
+int ui_hourStepper, ui_minStepper, ui_secStepper, ui_yearStepper, ui_monthStepper, ui_dayStepper;   // Stepper IDs for adjusting on Admin Tab
 
 // Variables for Simblee Cloud
 unsigned int userID = 0xe983942d; //Enter your assigned userID here
 unsigned int destESN = 0x00000001; // This is the destination from the Simblee Cloud Admin Site
-uint8_t ui_sendCloudSwitch;
+int ui_sendCloudSwitch;
 
 // Accelerometer Values
 int debounce;               // This is a minimum debounce value - additional debounce set using pot or remote terminal
@@ -214,7 +214,7 @@ byte accelSensitivity;               // Hex variable for sensitivity
 
 // Variables for the control byte
 // Control Register  (8 - 6 Reserved, 5-Clear Counts, 4-Toggle LEDs, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
-byte signalDebounceChange = B0000001;  // Mask for accessing the debounce bit
+byte signalDebounceChange = B00000001;  // Mask for accessing the debounce bit
 byte signalSentitivityChange = B00000010;   // Mask for accessing the sensitivity bit
 byte toggleStartStop = B00000100;   // Mask for accessing the start / stop bit
 byte toggleLEDs = B00001000;        // Mask for accessing the LED on off bit
@@ -388,7 +388,7 @@ void ui()   // The function that defines the iPhone UI
             break;
             
         default:
-            Serial.print("ui: Uknown screen requested: ");  // Don't think we can get here using the menubar but just in case
+            Serial.print("ui: Uknown screen requested: ");  // Don't think we can get here using the menuBar but just in case
             Serial.println(SimbleeForMobile.screen);
     }
 }
@@ -396,7 +396,10 @@ void ui()   // The function that defines the iPhone UI
 void ui_event(event_t &event)   // This is where we define the actions to occur on UI events
 {
     printEvent(event);
-    if (event.id == menuBar)                                          // This is the event handler for the menu bar
+    currentScreen = SimbleeForMobile.screen;    // If not, let's capture the current screen number
+    Serial.print("The current screen is: ");
+    Serial.println(currentScreen);
+    if (event.id == ui_menuBar)                                          // This is the event handler for the menu bar
     {
         switch(event.value)
         {
@@ -414,35 +417,144 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                 
             case 3: // This is the Admin Tab
                 if (adminUnlocked) SimbleeForMobile.showScreen(4);
-                else if (currentScreen == 1) SimbleeForMobile.updateValue(menuBar, 0);
+                else if (currentScreen == 1) SimbleeForMobile.updateValue(ui_menuBar, 0);
                 else SimbleeForMobile.showScreen(1);
                 break;
         }
     }
-    else if (event.id == ui_adminAccessField)   // Where you enter the Admin code
-    {
-        adminAccessInput = event.value;
-        if (adminAccessInput == adminAccessKey)
-        {
-            SimbleeForMobile.updateColor(ui_adminLockIcon,GREEN);
-            adminUnlocked = true;
-        }
-        else if (adminAccessInput != adminAccessKey)
-        {
-            adminAccessInput = 0;
-            SimbleeForMobile.updateValue(ui_adminAccessField,0);
-            SimbleeForMobile.updateColor(ui_adminLockIcon,RED);
-            adminUnlocked = false;
-            
-        }
+    switch (currentScreen) {
+        case 1:// The Current Screen
+            if (event.id == ui_adminAccessField)   // Where you enter the Admin code
+            {
+                adminAccessInput = event.value;
+                if (adminAccessInput == adminAccessKey)
+                {
+                    SimbleeForMobile.updateColor(ui_adminLockIcon,GREEN);
+                    adminUnlocked = true;
+                }
+                else if (adminAccessInput != adminAccessKey)
+                {
+                    adminAccessInput = 0;
+                    SimbleeForMobile.updateValue(ui_adminAccessField,0);
+                    SimbleeForMobile.updateColor(ui_adminLockIcon,RED);
+                    adminUnlocked = false;
+                    
+                }
+            }
+            else if (event.id == ui_LEDswitch) // LED on off switch on the Current Status Screen
+            {
+                controlRegisterValue = FRAMread8(CONTROLREGISTER);
+                FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // Toggle the LED bit
+                Serial.println("Toggled the LED bit");
+            }
+
+            break;
+        case 2:// The Daily Screen
+            Serial.println("Hmm, not ui events on the Daily Screen");
+            break;
+        case 3:// The Hourly Screen
+            Serial.println("Hmm, not ui events on the Hourly Screen");
+            break;
+        case 4:// The Admin Screen
+            if (event.id == ui_StartStopSwitch && event.type == EVENT_RELEASE) // Start / Stop Button handler from the Admin screen
+            {
+                controlRegisterValue = FRAMread8(CONTROLREGISTER);
+                FRAMwrite8(CONTROLREGISTER,toggleStartStop ^ controlRegisterValue);  // Toggle the start stop bit
+                if ((controlRegisterValue & toggleStartStop) >> 2) {
+                    SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
+                }
+                else SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
+            }
+            else if (event.id == ui_EraseMemSwitch && event.type == EVENT_RELEASE)  // This button allows us to erase the FRAM from the Admin screen
+            {
+                SimbleeForMobile.updateText(ui_EraseMemStatus,"Started");
+                ResetFRAM();
+                SimbleeForMobile.updateText(ui_EraseMemStatus,"Erased");
+                controlRegisterValue = FRAMread8(CONTROLREGISTER);
+                FRAMwrite8(CONTROLREGISTER,signalClearCounts ^ controlRegisterValue);  // Toggle the start stop bit
+                
+            }
+            else if (event.id == ui_DebounceStepper) // Changing the debounce value on the Admin Tab
+            {
+                debounce = event.value;
+                char debounceBuffer[5];   // Should be enough for three digits and ms
+                snprintf(debounceBuffer, 6, "%ims",debounce);
+                SimbleeForMobile.updateText(ui_DebounceValue,debounceBuffer);
+                SimbleeForMobile.updateText(ui_UpdateStatus,"Press \"Update\" to confirm");
+            }
+            else if (event.id == ui_SensitivityStepper)  // Changing the sensitivity value on the Admin Tab
+            {
+                accelInputValue = int(event.value);
+                SimbleeForMobile.updateValue(ui_SensitivityValue,accelInputValue);
+                SimbleeForMobile.updateText(ui_UpdateStatus,"Press \"Update\" to confirm");
+            }
+            else if (event.id == ui_UpdateButton && event.type == EVENT_RELEASE)  // A bit more complicated - Update botton event on Admin Tab
+            {
+                if (FRAMread16(DEBOUNCEADDR) != debounce)    // Check to see if debounce value needs to be updated
+                {
+                    FRAMwrite16(DEBOUNCEADDR, debounce);    // If so, write to FRAM
+                    controlRegisterValue = signalDebounceChange ^ controlRegisterValue; // Set the signal change bit
+                    FRAMwrite8(CONTROLREGISTER,controlRegisterValue);    // Then set the flag so Arduino will apply new setting
+                    Serial.println("Updating debounce");    // Let the console know
+                }
+                if (FRAMread8(SENSITIVITYADDR) != 10-accelInputValue) // Same as debounce above - but now for sensitivity
+                {
+                    FRAMwrite8(SENSITIVITYADDR, 10-accelInputValue);
+                    controlRegisterValue = signalSentitivityChange ^ controlRegisterValue; // Then set the flag so Arduino will apply new setting
+                    FRAMwrite8(CONTROLREGISTER,controlRegisterValue);
+                    Serial.println("Updating sensitivity");
+                }
+                if (tm.Year >> 0 && tm.Month >> 0 && tm.Day >> 0) // Will only update the update if these values are all non-zero
+                {
+                    t= makeTime(tm);
+                    TakeTheBus();  // Clock is an i2c device
+                    RTC.set(t);             //use the time_t value to ensure correct weekday is set
+                    setTime(t);
+                    GiveUpTheBus();
+                    Serial.println("Updating time");
+                }
+                controlRegisterValue = FRAMread8(CONTROLREGISTER);  // Read and display the control register after these updates
+                Serial.print("Control Register Value =");
+                Serial.println(controlRegisterValue);
+                SimbleeForMobile.updateText(ui_UpdateStatus," ");
+            }
+            else if (event.id == ui_hourStepper)    // Used to increment / decrement values for setting clock on the Admin Screen
+            {
+                tm.Hour = event.value;
+                SimbleeForMobile.updateValue(ui_setHour, tm.Hour);
+            }
+            else if (event.id == ui_minStepper)
+            {
+                tm.Minute = event.value;
+                SimbleeForMobile.updateValue(ui_setMinute, tm.Minute);
+            }
+            else if (event.id == ui_secStepper)
+            {
+                tm.Second = event.value;
+                SimbleeForMobile.updateValue(ui_setSecond, tm.Second);
+            }
+            else if (event.id == ui_yearStepper)
+            {
+                tm.Year = CalendarYrToTm(event.value);
+                SimbleeForMobile.updateValue(ui_setYear, tm.Year+1970);
+            }
+            else if (event.id == ui_monthStepper)
+            {
+                tm.Month = event.value;
+                SimbleeForMobile.updateValue(ui_setMonth, tm.Month);
+            }
+            else if (event.id == ui_dayStepper)
+            {
+                tm.Day = event.value;
+                SimbleeForMobile.updateValue(ui_setDay, tm.Day);
+            }
+            break;
+        default:
+            break;
     }
-    else if (event.id == ui_LEDswitch) // LED on off switch on the Current Status Screen
-    {
-        controlRegisterValue = FRAMread8(CONTROLREGISTER);
-        FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // Toggle the LED bit
-        Serial.println("Toggled the LED bit");
-    }
-    /*
+    
+    
+        /*
     else if (event.id == ui_sendCloudSwitch)
     {
         if(cloud.connect())
@@ -470,99 +582,7 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         else Serial.println("Simblee Cloud not Active - no data sent");
     }
     */
-    else if (event.id == ui_StartStopSwitch && event.type == EVENT_RELEASE) // Start / Stop Button handler from the Admin screen
-    {
         controlRegisterValue = FRAMread8(CONTROLREGISTER);
-        FRAMwrite8(CONTROLREGISTER,toggleStartStop ^ controlRegisterValue);  // Toggle the start stop bit
-        if ((controlRegisterValue & toggleStartStop) >> 2) {
-            SimbleeForMobile.updateText(ui_StartStopStatus, "Stopped");
-        }
-        else SimbleeForMobile.updateText(ui_StartStopStatus, "Running");
-    }
-    else if (event.id == ui_EraseMemSwitch && event.type == EVENT_RELEASE)  // This button allows us to erase the FRAM from the Admin screen
-    {
-        SimbleeForMobile.updateText(ui_EraseMemStatus,"Started");
-        ResetFRAM();
-        SimbleeForMobile.updateText(ui_EraseMemStatus,"Erased");
-        controlRegisterValue = FRAMread8(CONTROLREGISTER);
-        FRAMwrite8(CONTROLREGISTER,signalClearCounts ^ controlRegisterValue);  // Toggle the start stop bit
-        
-    }
-    else if (event.id == ui_DebounceStepper) // Changing the debounce value on the Admin Tab
-    {
-        debounce = event.value;
-        char debounceBuffer[5];   // Should be enough for three digits and ms
-        snprintf(debounceBuffer, 6, "%ims",debounce);
-        SimbleeForMobile.updateText(ui_DebounceValue,debounceBuffer);
-        SimbleeForMobile.updateText(ui_UpdateStatus,"Press \"Update\" to confirm");
-    }
-    else if (event.id == ui_SensitivityStepper)  // Changing the sensitivity value on the Admin Tab
-    {
-        accelInputValue = int(event.value);
-        SimbleeForMobile.updateValue(ui_SensitivityValue,accelInputValue);
-        SimbleeForMobile.updateText(ui_UpdateStatus,"Press \"Update\" to confirm");
-    }
-    else if (event.id == ui_UpdateButton && event.type == EVENT_RELEASE)  // A bit more complicated - Update botton event on Admin Tab
-    {
-        if (FRAMread16(DEBOUNCEADDR) != debounce)    // Check to see if debounce value needs to be updated
-        {
-            FRAMwrite16(DEBOUNCEADDR, debounce);    // If so, write to FRAM
-            controlRegisterValue = signalDebounceChange ^ controlRegisterValue; // Set the signal change bit
-            FRAMwrite8(CONTROLREGISTER,controlRegisterValue);    // Then set the flag so Arduino will apply new setting
-            Serial.println("Updating debounce");    // Let the console know
-        }
-        if (FRAMread8(SENSITIVITYADDR) != 10-accelInputValue) // Same as debounce above - but now for sensitivity
-        {
-            FRAMwrite8(SENSITIVITYADDR, 10-accelInputValue);
-            controlRegisterValue = signalSentitivityChange ^ controlRegisterValue; // Then set the flag so Arduino will apply new setting
-            FRAMwrite8(CONTROLREGISTER,controlRegisterValue);
-            Serial.println("Updating sensitivity");
-        }
-        if (tm.Year >> 0 && tm.Month >> 0 && tm.Day >> 0) // Will only update the update if these values are all non-zero
-        {
-            t= makeTime(tm);
-            TakeTheBus();  // Clock is an i2c device
-                RTC.set(t);             //use the time_t value to ensure correct weekday is set
-                setTime(t);
-            GiveUpTheBus();
-            Serial.println("Updating time");
-        }
-        controlRegisterValue = FRAMread8(CONTROLREGISTER);  // Read and display the control register after these updates
-        Serial.print("Control Register Value =");
-        Serial.println(controlRegisterValue);
-        SimbleeForMobile.updateText(ui_UpdateStatus," ");
-    }
-    else if (event.id == ui_hourStepper)    // Used to increment / decrement values for setting clock on the Admin Screen
-    {
-        tm.Hour = event.value;
-        SimbleeForMobile.updateValue(ui_setHour, tm.Hour);
-    }
-    else if (event.id == ui_minStepper)
-    {
-        tm.Minute = event.value;
-        SimbleeForMobile.updateValue(ui_setMinute, tm.Minute);
-    }
-    else if (event.id == ui_secStepper)
-    {
-        tm.Second = event.value;
-        SimbleeForMobile.updateValue(ui_setSecond, tm.Second);
-    }
-    else if (event.id == ui_yearStepper)
-    {
-        tm.Year = CalendarYrToTm(event.value);
-        SimbleeForMobile.updateValue(ui_setYear, tm.Year+1970);
-    }
-    else if (event.id == ui_monthStepper)
-    {
-        tm.Month = event.value;
-        SimbleeForMobile.updateValue(ui_setMonth, tm.Month);
-    }
-    else if (event.id == ui_dayStepper)
-    {
-        tm.Day = event.value;
-        SimbleeForMobile.updateValue(ui_setDay, tm.Day);
-    }
-    controlRegisterValue = FRAMread8(CONTROLREGISTER);
     Serial.print("ControlRegisterValue = ");
     Serial.println(controlRegisterValue);
 }
@@ -570,19 +590,18 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
 
 void createCurrentScreen() // This is the screen that displays current status information
 {
-
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
-    SimbleeForMobile.updateValue(menuBar, 0);
+    ui_menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
+    SimbleeForMobile.updateValue(ui_menuBar, 0);
 
     // all we are doing here is laying out the screen - updates are in a separate function
-    dateTimeField = SimbleeForMobile.drawText(40, 140, " ");
+    ui_dateTimeField = SimbleeForMobile.drawText(40, 140, " ");
     SimbleeForMobile.drawText(40, 160, "Hourly Count:");
-    hourlyField = SimbleeForMobile.drawText(200,160," ");
+    ui_hourlyField = SimbleeForMobile.drawText(200,160," ");
     SimbleeForMobile.drawText(40, 180, "Daily Count:");
-    dailyField =   SimbleeForMobile.drawText(200,180," ");
+    ui_dailyField =   SimbleeForMobile.drawText(200,180," ");
     SimbleeForMobile.drawText(40, 200, "State of Charge:");
-    chargeField = SimbleeForMobile.drawText(200,200," ");
+    ui_chargeField = SimbleeForMobile.drawText(200,200," ");
     SimbleeForMobile.drawText(40, 220, "Counter Status:");
     ui_StartStopStatus = SimbleeForMobile.drawText(200, 220, " ");
     ui_adminLockIcon = SimbleeForMobile.drawText(40,290,"Admin Code:",RED);
@@ -614,22 +633,22 @@ void updateCurrentScreen() // Since we have to update this screen three ways: cr
     }
     else if (stateOfCharge > 75) {
         snprintf(battBuffer, 5,"%1.0f%%",stateOfCharge);   // Puts % next to batt from 0-100
-        SimbleeForMobile.updateText(chargeField,battBuffer);
-        SimbleeForMobile.updateColor(chargeField,GREEN);
+        SimbleeForMobile.updateText(ui_chargeField,battBuffer);
+        SimbleeForMobile.updateColor(ui_chargeField,GREEN);
     }
     else if (stateOfCharge > 50) {
         snprintf(battBuffer, 5,"%1.0f%%",stateOfCharge);   // Puts % next to batt from 0-100
-        SimbleeForMobile.updateText(chargeField,battBuffer);
-        SimbleeForMobile.updateColor(chargeField,MAGENTA);
+        SimbleeForMobile.updateText(ui_chargeField,battBuffer);
+        SimbleeForMobile.updateColor(ui_chargeField,MAGENTA);
     }
     else {
         snprintf(battBuffer, 5,"%1.0f%%",stateOfCharge);   // Puts % next to batt from 0-100
-        SimbleeForMobile.updateText(chargeField,battBuffer);
-        SimbleeForMobile.updateColor(chargeField,RED);
+        SimbleeForMobile.updateText(ui_chargeField,battBuffer);
+        SimbleeForMobile.updateColor(ui_chargeField,RED);
     }
 
-    SimbleeForMobile.updateValue(hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR)); // Populate the hourly and daily fields with values
-    SimbleeForMobile.updateValue(dailyField, FRAMread16(CURRENTDAILYCOUNTADDR));
+    SimbleeForMobile.updateValue(ui_hourlyField, FRAMread16(CURRENTHOURLYCOUNTADDR)); // Populate the hourly and daily fields with values
+    SimbleeForMobile.updateValue(ui_dailyField, FRAMread16(CURRENTDAILYCOUNTADDR));
     
     controlRegisterValue = FRAMread8(CONTROLREGISTER);          // Update the Start and Stop fields with the latest status
     if ((controlRegisterValue & toggleStartStop) >> 2) {
@@ -659,8 +678,8 @@ void createDailyScreen() // This is the screen that displays current status info
     char battBuffer[4];   // Should be enough 3 digits plus % symbol
 
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
-    SimbleeForMobile.updateValue(menuBar, 1);
+    ui_menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
+    SimbleeForMobile.updateValue(ui_menuBar, 1);
     
     SimbleeForMobile.drawText(xAxis, yAxis,"Date");
     SimbleeForMobile.drawText(xAxis+21*columnWidth, yAxis,"Count");
@@ -703,8 +722,8 @@ void createHourlyScreen() // This is the screen that displays today's hourly cou
     time_t mighnightUnixT = findMidnight(t);   // This is the midnight that preceeds today's day
     
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
-    SimbleeForMobile.updateValue(menuBar, 2);
+    ui_menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
+    SimbleeForMobile.updateValue(ui_menuBar, 2);
     
     SimbleeForMobile.drawText(xAxis, yAxis,"Hour");
     SimbleeForMobile.drawText(xAxis+21*columnWidth, yAxis,"Count");
@@ -738,8 +757,8 @@ void createAdminScreen() // This is the screen that displays current status info
     char debounceBuffer[5];   // Should be enough for three digits and ms
     
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
-    menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
-    SimbleeForMobile.updateValue(menuBar, 3);
+    ui_menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
+    SimbleeForMobile.updateValue(ui_menuBar, 3);
     
     SimbleeForMobile.drawRect(10,340,300,140,YELLOW);
 
@@ -762,8 +781,6 @@ void createAdminScreen() // This is the screen that displays current status info
     SimbleeForMobile.drawText(160,240,"Sensitivity:");
     ui_SensitivityValue =  SimbleeForMobile.drawText(220,260,"");
     ui_SensitivityStepper = SimbleeForMobile.drawStepper(180,280,20,0,10);
-    Serial.print("the ui_SensitivityStepper = ");
-    Serial.println(ui_SensitivityStepper);
 
     
     SimbleeForMobile.drawText(100,350,"Set Time and Date");
@@ -797,36 +814,36 @@ void createAdminScreen() // This is the screen that displays current status info
     
     SimbleeForMobile.endScreen();
     
-    Serial.print( ui_adminLockIcon); Serial.print(",");       // Shows whether the admin tab is unlocked
-    Serial.print( ui_adminAccessField); Serial.print(",");    // Where the Admin access code is entered
-    Serial.print( ui_StartStopSwitch); Serial.print(","); // Start stop button ID on Admin Tab
-    Serial.print( ui_StartStopStatus); Serial.print(","); // Text field ID for start stop status on Admin Tab
-    Serial.print( ui_EraseMemSwitch); Serial.print(","); // Erase Memory button ID on Admin Tab
-    Serial.print( ui_EraseMemStatus); Serial.print(","); // Text field ID for Erase Memory status on Admin Tab
-    Serial.print( ui_DebounceStepper); Serial.print(",");  // Slider ID for adjusting debounce on Admin Tab
-    Serial.print( ui_SensitivityStepper); Serial.print(",");   // Slider ID for adjusting sensitivity on Admin Tab
-    Serial.print( ui_SensitivityValue); Serial.print(",");    // Provide clear value of the sensitivity
-    Serial.print( ui_DebounceValue); Serial.print(",");       // Provide a clear value of the debounce setting
-    Serial.print( ui_LEDswitch); Serial.print(",");   // Used to turn on and off the LEDs
-    Serial.print( ui_UpdateButton); Serial.print(",");  // Update button ID on Admin Tab
-    Serial.print( ui_UpdateStatus); Serial.print(",");    // Indicates if an update is pending
-    Serial.print( dateTimeField); Serial.print(",");  // Text field on Current Tab
-    Serial.print( hourlyField); Serial.print(",");    // Hour field ID for Houly Tab
-    Serial.print( dailyField); Serial.print(",");     // Date feild ID for Hourly Tab
-    Serial.print( chargeField); Serial.print(",");    // State of charge field ID on Current Tab
-    Serial.print( menuBar); Serial.print(",");        // ID for the tabbed Menu Bar
-    Serial.print( ui_setYear); Serial.print(",");
-    Serial.print(ui_setMonth); Serial.print(",");
-    Serial.print(ui_setDay); Serial.print(",");
-    Serial.print(ui_setHour); Serial.print(",");
-    Serial.print(ui_setMinute); Serial.print(",");
-    Serial.print(ui_setSecond); Serial.print(",");
-    Serial.print( ui_hourStepper); Serial.print(",");
-    Serial.print(ui_minStepper); Serial.print(",");
-    Serial.print(ui_secStepper); Serial.print(",");
-    Serial.print(ui_yearStepper); Serial.print(",");
-    Serial.print(ui_monthStepper); Serial.print(",");
-    Serial.println(ui_dayStepper);
+    Serial.print("menuBar ="); Serial.println( ui_menuBar);      // ID for the tabbed Menu Bar
+    Serial.print("dateTimeField ="); Serial.println( ui_dateTimeField);   // Text field on Current Tab
+    Serial.print("EraseMemStatus ="); Serial.println( ui_EraseMemStatus);  // Text field ID for Erase Memory status on Admin Tab
+    Serial.print("EreaseMemSwitch="); Serial.println( ui_EraseMemSwitch);  // Erase Memory button ID on Admin Tab
+    Serial.print("hourlyField ="); Serial.println( ui_hourlyField);   // Hour field ID for Houly Tab
+    Serial.print("StartStopStatus ="); Serial.println( ui_StartStopStatus);// Text field ID for start stop status on Admin Tab
+    Serial.print("dailyField ="); Serial.println( ui_dailyField);     // Date feild ID for Hourly Tab
+    Serial.print("StartStopSwitch = ");Serial.println( ui_StartStopSwitch);  // Start stop button ID on Admin Tab
+    Serial.print("DebounceValue ="); Serial.println( ui_DebounceValue);     // Provide a clear value of the debounce setting
+    Serial.print("chargeField ="); Serial.println( ui_chargeField);    // State of charge field ID on Current Tab
+    Serial.print("DebounceStepper ="); Serial.println( ui_DebounceStepper);  // Slider ID for adjusting debounce on Admin Tab
+    Serial.print("SensitivityValue ="); Serial.println( ui_SensitivityValue);   // Provide clear value of the sensitivity
+    Serial.print("adminLockIcon = ");Serial.println( ui_adminLockIcon);      // Shows whether the admin tab is unlocked
+    Serial.print("adminAccessField = ");  Serial.println( ui_adminAccessField);    // Where the Admin access code is entered
+    Serial.print("SensitivityStepper ="); Serial.println( ui_SensitivityStepper);    // Slider ID for adjusting sensitivity on Admin Tab
+    Serial.print("LEDswitch ="); Serial.println( ui_LEDswitch);   // Used to turn on and off the LEDs
+    Serial.print("setYear ="); Serial.println( ui_setYear);
+    Serial.print("setMonth ="); Serial.println(ui_setMonth);
+    Serial.print("setDay ="); Serial.println(ui_setDay);
+    Serial.print("setHour ="); Serial.println(ui_setHour);
+    Serial.print("setMinute ="); Serial.println(ui_setMinute);
+    Serial.print("setSecond ="); Serial.println(ui_setSecond);
+    Serial.print("hourStepper ="); Serial.println( ui_hourStepper);
+    Serial.print("minStepper ="); Serial.println(ui_minStepper);
+    Serial.print("secStepper ="); Serial.println(ui_secStepper);
+    Serial.print("yearStepper ="); Serial.println(ui_yearStepper);
+    Serial.print("monthStepper ="); Serial.println(ui_monthStepper);
+    Serial.print("dayStepper ="); Serial.println(ui_dayStepper);
+    Serial.print("UpdateButton ="); Serial.println( ui_UpdateButton);   // Update button ID on Admin Tab
+    Serial.print("UpdateStatus ="); Serial.println( ui_UpdateStatus);   // Indicates if an update is pending
     
 }
 
@@ -940,7 +957,7 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
     }
     Serial.print("Current Date and Time: ");
     Serial.println(dateTimePointer);
-    SimbleeForMobile.updateText(dateTimeField, dateTimePointer);
+    SimbleeForMobile.updateText(ui_dateTimeField, dateTimePointer);
 }
 
 
