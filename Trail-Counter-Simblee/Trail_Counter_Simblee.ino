@@ -147,9 +147,8 @@ void createDailyScreen(); // This is the screen that displays current status inf
 void createHourlyScreen(); // This is the screen that displays current status information
 void createAdminScreen(); // This is the screen that you use to administer the device
 void printEvent(event_t &event);     // Utility method to print information regarding the given event
-int AlarmInteruptHandler(uint32_t dummyPin); // This is where we will take action when we detect an alarm
 int wakeUpAlarm(uint32_t dummyButton); // Function to let us know we are waking up
-volatile boolean alarmInterrupt = false;
+void enable32Khz(uint8_t enable); // Need to turn on the 32k square wave for bus moderation
 
 
 // Define variables and constants
@@ -164,6 +163,7 @@ float stateOfCharge = 0;    // Initialize state of charge
 // FRAM and Unix time variables
 tmElements_t tm;        // Time elements (such as tm.Minues
 time_t t;               // UNIX time format (not note 32 bit number unless converted)
+volatile boolean alarmInterrupt = false;  // OK, this is the Alarm Interrupt flag
 int lastHour = 0;  // For recording the startup values
 int lastDate = 0;   // For providing dat break counts
 unsigned int hourlyPersonCount = 0;  // hourly counter
@@ -175,7 +175,7 @@ int adminAccessKey = 27617;     // This is the code you need to enter to get to 
 int adminAccessInput = 0;       // This is the user's input
 
 boolean adminUnlocked = false;  // Start with the Admin tab locked
-const char* releaseNumber = "1.23";
+const char* releaseNumber = "1.24";
 
 // Variables for Simblee Display
 const char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
@@ -204,7 +204,7 @@ int ui_hourStepper, ui_minStepper, ui_secStepper, ui_yearStepper, ui_monthSteppe
 
 // Variables for Simblee Cloud
 unsigned int userID = 0xe983942d; //Enter your assigned userID here
-unsigned int destESN = 0x00000001; // This is the destination from the Simblee Cloud Admin Site
+unsigned int destESN = 0x00001010; // This is the destination from the Simblee Cloud Admin Site
 int ui_sendCloudSwitch;
 
 // Accelerometer Values
@@ -229,18 +229,17 @@ void setup()
 {
     Wire.beginOnPins(SCLpin,SDApin);  // Not sure if this talks to the i2c bus or not - just to be safe...
     Serial.begin(9600);
-    printf("Module ESN is 0x%08x\n", cloud.myESN);
-    cloud.userID = userID;
-    Serial.println("Startup delay...");
-    delay(500); // This is to make sure that the Arduino boots first as it initializes the various devices
     
     // Unlike Arduino Simblee does not pre-define inputs
     pinMode(TalkPin, INPUT);  // Shared Talk line
     pinMode(The32kPin, INPUT);   // Shared 32kHz line from clock
     pinMode(AlarmPin,INPUT);    // Shared DS3231 Alarm Pin
-    attachPinInterrupt(20,AlarmInteruptHandler,LOW);    // this will trigger an alarm that will put Simblee in low power mode until morning
+    attachPinInterrupt(AlarmPin,wakeUpAlarm,LOW);    // this will trigger an alarm that will put Simblee in low power mode until morning
+
+    enable32Khz(1); // turns on the 32k squarewave - to moderate access to the i2c bus
     
     TakeTheBus(); // Need the bus as we access the FRAM
+  
         if (fram.begin()) {  // you can stick the new i2c addr in here, e.g. begin(0x51);
             Serial.println("Found I2C FRAM");
         }
@@ -271,7 +270,33 @@ void setup()
         }
     }
     
-    // Set up the Simblee Mobile App
+    TakeTheBus();
+        // Initialize the battery monitor
+        batteryMonitor.reset();               // Initialize the battery monitor
+        batteryMonitor.quickStart();
+        // Set up the clock as we will control it and the alarms here
+        setSyncProvider(RTC.get);
+        Serial.println(F("RTC Sync"));
+        if (timeStatus() != timeSet) {
+            Serial.println(F(" time sync fail!"));
+            BlinkForever();
+        }
+        // We need to set an Alarm or Two in order to ensure that the Simblee is put to sleep at night
+        RTC.squareWave(SQWAVE_NONE);            //Disable the default square wave of the SQW pin.
+        RTC.alarm(ALARM_1);                     // This will clear the Alarm flags
+        RTC.alarm(ALARM_2);                     // This will clear the Alarm flags
+        RTC.setAlarm(ALM1_MATCH_HOURS,00,00,22,0); // Set the evening Alarm
+        RTC.setAlarm(ALM2_MATCH_HOURS,00,00,7,0); // Set the moringing Alarm
+        //RTC.setAlarm(ALM1_MATCH_MINUTES,00,42,00,0); // Set the evening Alarm
+        //RTC.setAlarm(ALM2_MATCH_MINUTES,00,43,00,0); // Set the morning Alarm
+        RTC.alarmInterrupt(ALARM_2, true);      // Connect the Interrupt to the Alarms (or not)
+        RTC.alarmInterrupt(ALARM_1, true);
+    GiveUpTheBus();
+    
+    // Set up the Simblee Mobile App and Simblee Cloud
+    printf("Module ESN is 0x%08x\n", cloud.myESN);
+    Serial.println("");
+    cloud.userID = userID;
     SimbleeForMobile.deviceName = "Umstead";          // Device name
     SimbleeForMobile.advertisementData = "Spare" ;  // Name of data service
     SimbleeForMobile.begin();
@@ -284,30 +309,40 @@ void loop()
 {
     SimbleeForMobile.process(); // process must be called in the loop for SimbleeForMobile
     cloud.process();            // process must be called in the loop for Simblee Cloud
-    if (alarmInterrupt)
+    if (alarmInterrupt)         // Here is where we manage the Simblee's sleep and wake cycles
     {
-        delay(100);         // Keeps us from hammering the i2c bus
-        alarmInterrupt = false;
         TakeTheBus();
-            t = RTC.get();      // We will check the time to make sure it is the evening alarm
-            stateOfCharge = batteryMonitor.getSoC();    // Then we will check the battery
-        GiveUpTheBus();
-        if (hour(t) == 22) {     // Only going to sleep at night - Requires a 10PM alarm
-            Serial.println("Going to Sleep");
-            delay(1000);
-        
-            if (stateOfCharge > 75)
+            if (RTC.alarm(ALARM_1))
             {
-                Simblee_ULPDelay(HOURS(8)); // Sleeps until 6am if the battery is 75% charged
+                alarmInterrupt = true;   // (re)set the Alarm Flag as it is time to go to sleep
             }
             else
             {
-                Simblee_ULPDelay(HOURS(14)); // Sleeps until noon if the battery is less than 75% charged
+                RTC.alarm(ALARM_2);     // Weird I know but this code does not recognize Alarm 2 for waking up - simply clear it here.
+                alarmInterrupt = false;  // Clear the Alarm Flag as it is time to wake up
             }
-            // If we want to wake on a pin interrupt - these are the lines of code
-            // Simblee_pinWakeCallback(20, LOW, wakeUpAlarm); // configures pin 20 to wake up device on a Low signal
-            // Simblee_systemOff();  // Very low power - only comes back with interrupt
+        GiveUpTheBus();
+        if (alarmInterrupt)
+        {
+            Simblee_pinWakeCallback(AlarmPin, LOW, wakeUpAlarm); // configures pin 20 to wake up device on a Low signal
+            TakeTheBus();
+                stateOfCharge = batteryMonitor.getSoC();
+                if (stateOfCharge >= 70)   // Update the value and color of the state of charge field
+                {
+                  RTC.setAlarm(ALM2_MATCH_HOURS,00,00,7,0); // Set the moringing Alarm early for good battery
+                }
+                else RTC.setAlarm(ALM2_MATCH_HOURS,00,00,12,0); // Set the moringing Alarm later for low battery
+            GiveUpTheBus();
+            alarmInterrupt = false;  // Now we can clear the interrupt flag
+            Serial.println("Going to Sleep");
+            delay(1000);
+            Simblee_systemOff();  // Very low power - only comes back with interrupt
         }
+        else
+        {
+            Serial.println("Time to wake up");
+        }
+
     }
     if (SimbleeForMobile.connected && SimbleeForMobile.screen == 1)
     {
@@ -324,8 +359,8 @@ void loop()
 
 int wakeUpAlarm(uint32_t dummyButton)  // Function to let us know we are waking up
 {
-    Simblee_resetPinWake(20); // reset state of pin that caused wakeup
-    Serial.println("Waking Up");
+    Simblee_resetPinWake(AlarmPin); // reset state of pin that caused wakeup
+    alarmInterrupt = true;  // Set the Alarm flag
 }
 
 void SimbleeForMobile_onConnect()   // Actions to take once we get connected.
@@ -445,7 +480,7 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                 FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // Toggle the LED bit
                 Serial.println("Toggled the LED bit");
             }
-            /*
+            
             else if (event.id == ui_sendCloudSwitch)
             {
                 if(cloud.connect())
@@ -455,27 +490,19 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                 else Serial.println("Simblee Cloud Not Connected");
                 if (cloud.active())
                 {
-                    cloud.send(destESN, "S", 1);    // send start message (ie: start the timer on the receiving side)
-                    for (int i = 1; i < 5; i++)
-                    {
-                        // send a '1' message
-                        cloud.send(destESN, "1", 1);
-                        // send a '0' message
-                        cloud.send(destESN, "0", 1);
-                    }
-                    cloud.send(destESN, "E", 1); // send end message (ie: stop the timer on the receiving side)
+                    cloud.send(destESN, "0", 1);    // send start message (ie: start the timer on the receiving side)
                     Serial.println("Cloud data sent");
                 }
                 else Serial.println("Simblee Cloud not Active - no data sent");
              }
-             */
+            
 
             break;
         case 2:// The Daily Screen
-            Serial.println("Hmm, not ui events on the Daily Screen");
+            Serial.println("Hmm, no ui events on the Daily Screen");
             break;
         case 3:// The Hourly Screen
-            Serial.println("Hmm, not ui events on the Hourly Screen");
+            Serial.println("Hmm, no ui events on the Hourly Screen");
             break;
         case 4:// The Admin Screen
             if (event.id == ui_StartStopSwitch && event.type == EVENT_RELEASE) // Start / Stop Button handler from the Admin screen
@@ -606,8 +633,8 @@ void createCurrentScreen() // This is the screen that displays current status in
     SimbleeForMobile.drawText(40,356, "Indicator Lights:");
     ui_LEDswitch = SimbleeForMobile.drawSwitch(170,350);
     SimbleeForMobile.setEvents(ui_LEDswitch,EVENT_PRESS);
-    //ui_sendCloudSwitch = SimbleeForMobile.drawButton(70,400,150,"Send to Cloud");
-    //SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
+    ui_sendCloudSwitch = SimbleeForMobile.drawButton(70,400,150,"Send to Cloud");
+    SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
     SimbleeForMobile.drawText(10,(SimbleeForMobile.screenHeight-20),"Version:");
     SimbleeForMobile.drawText(80,(SimbleeForMobile.screenHeight-20),releaseNumber);
     SimbleeForMobile.endScreen();
@@ -621,6 +648,9 @@ void updateCurrentScreen() // Since we have to update this screen three ways: cr
         t = RTC.get();
         stateOfCharge = batteryMonitor.getSoC();
     GiveUpTheBus();
+    
+    toArduinoTime(t);  // Update Time Field on screen
+
     
     if (stateOfCharge >= 105)   // Update the value and color of the state of charge field
     {
@@ -919,18 +949,11 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
         dateTimeArray[15] = int(timeElement.Second/10)+48;
         dateTimeArray[16] = (timeElement.Second%10)+48;
     }
-    Serial.print("Current Date and Time: ");
-    Serial.println(dateTimePointer);
+    //Serial.print("Current Date and Time: ");
+    //Serial.println(dateTimePointer);
     SimbleeForMobile.updateText(ui_dateTimeField, dateTimePointer);
 }
 
-
-
-int AlarmInteruptHandler(uint32_t dummyPin) // This is where we will take action when we detect an alarm
-{
-    alarmInterrupt = true;
-    return 0;
-}
 
 
 void BlinkForever()
@@ -939,4 +962,24 @@ void BlinkForever()
     while(1) { }
 }
 
+void enable32Khz(uint8_t enable)  // Need to turn on the 32k square wave for bus moderation
+{
+    Wire.beginTransmission(0x68);
+    Wire.write(0x0F);
+    Wire.endTransmission();
+    
+    // status register
+    Wire.requestFrom(0x68, 1);
+    
+    uint8_t sreg = Wire.read();
+    
+    sreg &= ~0b00001000; // Set to 0
+    if (enable == true)
+        sreg |=  0b00001000; // Enable if required.
+    
+    Wire.beginTransmission(0x68);
+    Wire.write(0x0F);
+    Wire.write(sreg);
+    Wire.endTransmission();
+}
 
