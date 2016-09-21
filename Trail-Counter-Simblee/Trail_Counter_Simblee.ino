@@ -298,7 +298,7 @@ void setup()
     Serial.println("");
     cloud.userID = userID;
     SimbleeForMobile.deviceName = "Umstead";          // Device name
-    SimbleeForMobile.advertisementData = "Spare" ;  // Name of data service
+    SimbleeForMobile.advertisementData = "Dev" ;  // Name of data service
     SimbleeForMobile.begin();
     
     Serial.println("Ready to go....");
@@ -560,9 +560,10 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                 {
                     t= makeTime(tm);
                     TakeTheBus();  // Clock is an i2c device
-                    RTC.set(t);             //use the time_t value to ensure correct weekday is set
+                        RTC.set(t);             //use the time_t value to ensure correct weekday is set
                     setTime(t);
                     GiveUpTheBus();
+                    tm.Year = tm.Month = tm.Day = tm.Hour  = tm.Minute = tm.Second = 0;
                     Serial.println("Updating time");
                 }
                 controlRegisterValue = FRAMread8(CONTROLREGISTER);  // Read and display the control register after these updates
