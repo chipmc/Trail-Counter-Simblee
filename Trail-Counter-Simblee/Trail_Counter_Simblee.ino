@@ -271,11 +271,9 @@ void setup()
     }
     
     TakeTheBus();
-        // Initialize the battery monitor
         batteryMonitor.reset();               // Initialize the battery monitor
         batteryMonitor.quickStart();
-        // Set up the clock as we will control it and the alarms here
-        setSyncProvider(RTC.get);
+        setSyncProvider(RTC.get);              // Set up the clock as we will control it and the alarms here
         Serial.println(F("RTC Sync"));
         if (timeStatus() != timeSet) {
             Serial.println(F(" time sync fail!"));
@@ -285,10 +283,10 @@ void setup()
         RTC.squareWave(SQWAVE_NONE);            //Disable the default square wave of the SQW pin.
         RTC.alarm(ALARM_1);                     // This will clear the Alarm flags
         RTC.alarm(ALARM_2);                     // This will clear the Alarm flags
-        RTC.setAlarm(ALM1_MATCH_HOURS,00,00,22,0); // Set the evening Alarm
-        RTC.setAlarm(ALM2_MATCH_HOURS,00,00,7,0); // Set the moringing Alarm
-        //RTC.setAlarm(ALM1_MATCH_MINUTES,00,42,00,0); // Set the evening Alarm
-        //RTC.setAlarm(ALM2_MATCH_MINUTES,00,43,00,0); // Set the morning Alarm
+        RTC.setAlarm(ALM1_MATCH_HOURS,00,00,20,0); // Set the evening Alarm
+        RTC.setAlarm(ALM2_MATCH_HOURS,00,00,7,0); // Set the morning Alarm
+        //RTC.setAlarm(ALM1_MATCH_MINUTES,00,42,00,0); // Start Alarm - for debugging
+        //RTC.setAlarm(ALM2_MATCH_MINUTES,00,43,00,0); // Wake Alarm - for debugging
         RTC.alarmInterrupt(ALARM_2, true);      // Connect the Interrupt to the Alarms (or not)
         RTC.alarmInterrupt(ALARM_1, true);
     GiveUpTheBus();
@@ -298,7 +296,7 @@ void setup()
     Serial.println("");
     cloud.userID = userID;
     SimbleeForMobile.deviceName = "Umstead";          // Device name
-    SimbleeForMobile.advertisementData = "Dev" ;  // Name of data service
+    SimbleeForMobile.advertisementData = "Rte40" ;  // Name of data service
     SimbleeForMobile.begin();
     
     Serial.println("Ready to go....");
@@ -308,7 +306,7 @@ void setup()
 void loop()
 {
     SimbleeForMobile.process(); // process must be called in the loop for SimbleeForMobile
-    cloud.process();            // process must be called in the loop for Simblee Cloud
+    //cloud.process();            // process must be called in the loop for Simblee Cloud
     if (alarmInterrupt)         // Here is where we manage the Simblee's sleep and wake cycles
     {
         TakeTheBus();
@@ -480,7 +478,7 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                 FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // Toggle the LED bit
                 Serial.println("Toggled the LED bit");
             }
-            
+            /*
             else if (event.id == ui_sendCloudSwitch)
             {
                 if(cloud.connect())
@@ -495,14 +493,14 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                 }
                 else Serial.println("Simblee Cloud not Active - no data sent");
              }
-            
+            */
 
             break;
         case 2:// The Daily Screen
-            Serial.println("Hmm, no ui events on the Daily Screen");
+            Serial.println("No ui events on the Daily Screen");
             break;
         case 3:// The Hourly Screen
-            Serial.println("Hmm, no ui events on the Hourly Screen");
+            Serial.println("No ui events on the Hourly Screen");
             break;
         case 4:// The Admin Screen
             if (event.id == ui_StartStopSwitch && event.type == EVENT_RELEASE) // Start / Stop Button handler from the Admin screen
@@ -561,14 +559,11 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                     t= makeTime(tm);
                     TakeTheBus();  // Clock is an i2c device
                         RTC.set(t);             //use the time_t value to ensure correct weekday is set
-                    setTime(t);
+                        setTime(t);
                     GiveUpTheBus();
                     tm.Year = tm.Month = tm.Day = tm.Hour  = tm.Minute = tm.Second = 0;
                     Serial.println("Updating time");
                 }
-                controlRegisterValue = FRAMread8(CONTROLREGISTER);  // Read and display the control register after these updates
-                Serial.print("Control Register Value =");
-                Serial.println(controlRegisterValue);
                 SimbleeForMobile.updateText(ui_UpdateStatus," ");
             }
             else if (event.id == ui_hourStepper)    // Used to increment / decrement values for setting clock on the Admin Screen
@@ -605,10 +600,8 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
         default:
             break;
     }
-    
-    
     controlRegisterValue = FRAMread8(CONTROLREGISTER);
-    Serial.print("ControlRegisterValue = ");
+    Serial.print("Control Register Value = ");
     Serial.println(controlRegisterValue);
 }
 
@@ -634,8 +627,8 @@ void createCurrentScreen() // This is the screen that displays current status in
     SimbleeForMobile.drawText(40,356, "Indicator Lights:");
     ui_LEDswitch = SimbleeForMobile.drawSwitch(170,350);
     SimbleeForMobile.setEvents(ui_LEDswitch,EVENT_PRESS);
-    ui_sendCloudSwitch = SimbleeForMobile.drawButton(70,400,150,"Send to Cloud");
-    SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
+    //ui_sendCloudSwitch = SimbleeForMobile.drawButton(70,400,150,"Send to Cloud");
+    //SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
     SimbleeForMobile.drawText(10,(SimbleeForMobile.screenHeight-20),"Version:");
     SimbleeForMobile.drawText(80,(SimbleeForMobile.screenHeight-20),releaseNumber);
     SimbleeForMobile.endScreen();
