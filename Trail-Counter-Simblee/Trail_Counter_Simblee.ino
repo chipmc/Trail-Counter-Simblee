@@ -168,11 +168,13 @@ int lastHour = 0;  // For recording the startup values
 int lastDate = 0;   // For providing dat break counts
 unsigned int hourlyPersonCount = 0;  // hourly counter
 unsigned int dailyPersonCount = 0;   //  daily counter
+
 // Interface vairables
 unsigned int lastupdate = 0;    // For when we are on the current screen
 int updateFrequency = 1000;     // How often will we update the current screen
 int adminAccessKey = 27617;     // This is the code you need to enter to get to the admin field
 int adminAccessInput = 0;       // This is the user's input
+boolean clearFRAM = false;
 
 boolean adminUnlocked = false;  // Start with the Admin tab locked
 const char* releaseNumber = "1.24";
@@ -429,7 +431,6 @@ void ui()   // The function that defines the iPhone UI
 void ui_event(event_t &event)   // This is where we define the actions to occur on UI events
 {
     printEvent(event);
-    boolean clearFRAM = false;
     currentScreen = SimbleeForMobile.screen;    // If not, let's capture the current screen number
     if (event.id == ui_menuBar)                                          // This is the event handler for the menu bar
     {
@@ -785,7 +786,7 @@ void createAdminScreen() // This is the screen that displays current status info
     ui_menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(ui_menuBar, 3);
     
-    SimbleeForMobile.drawRect(10,340,300,140,YELLOW);
+    SimbleeForMobile.drawRect(10,310,300,170,YELLOW);
 
     // The first control will be a switch
     controlRegisterValue = FRAMread8(CONTROLREGISTER);
@@ -798,33 +799,32 @@ void createAdminScreen() // This is the screen that displays current status info
     ui_StartStopSwitch = SimbleeForMobile.drawButton(180,150,110, "Start/Stop");
     SimbleeForMobile.setEvents(ui_StartStopSwitch, EVENT_RELEASE);
     
-    SimbleeForMobile.drawText(20,240,"Debounce:");
-    ui_DebounceValue = SimbleeForMobile.drawText(50,260,"");
-    ui_DebounceStepper = SimbleeForMobile.drawStepper(20,280,20,0,500);
+    SimbleeForMobile.drawText(25,200,"Debounce:");
+    ui_DebounceValue = SimbleeForMobile.drawText(60,220,"");
+    ui_DebounceStepper = SimbleeForMobile.drawStepper(25,240,100,0,500);
 
  
-    SimbleeForMobile.drawText(160,240,"Sensitivity:");
-    ui_SensitivityValue =  SimbleeForMobile.drawText(220,260,"");
-    ui_SensitivityStepper = SimbleeForMobile.drawStepper(180,280,20,0,10);
+    SimbleeForMobile.drawText(190,200,"Sensitivity:");
+    ui_SensitivityValue =  SimbleeForMobile.drawText(230,220,"");
+    ui_SensitivityStepper = SimbleeForMobile.drawStepper(185,240,100,0,10);
 
     
-    SimbleeForMobile.drawText(100,350,"Set Time and Date");
-    //SimbleeForMobile.drawText(20,340,"Set Date");
-    ui_setYear = SimbleeForMobile.drawText(35,370,60,tm.Year);
-    ui_setMonth = SimbleeForMobile.drawText(140,370,45,tm.Month);
-    ui_setDay = SimbleeForMobile.drawText(240,370,40,tm.Day);
+    SimbleeForMobile.drawText(100,310,"Set Time and Date");
 
-    //SimbleeForMobile.drawText(20,400,"Set Time");
-    ui_setHour = SimbleeForMobile.drawText(40,420,40,tm.Hour);
-    ui_setMinute = SimbleeForMobile.drawText(140,420,45,tm.Minute);
-    ui_setSecond = SimbleeForMobile.drawText(240,420,40,tm.Second);
+    ui_setYear = SimbleeForMobile.drawText(40,330,60,tm.Year);
+    ui_setMonth = SimbleeForMobile.drawText(140,330,45,tm.Month);
+    ui_setDay = SimbleeForMobile.drawText(240,330,40,tm.Day);
 
-    ui_hourStepper = SimbleeForMobile.drawStepper(15,440,20,0,24);
-    ui_minStepper = SimbleeForMobile.drawStepper(110,440,20,0,60);
-    ui_secStepper = SimbleeForMobile.drawStepper(205,440,20,0,60);
-    ui_yearStepper = SimbleeForMobile.drawStepper(15,390,20,2016,2017);
-    ui_monthStepper = SimbleeForMobile.drawStepper(110,390,20,1,12);
-    ui_dayStepper = SimbleeForMobile.drawStepper(205,390,20,1,31);
+    ui_setHour = SimbleeForMobile.drawText(50,400,40,tm.Hour);
+    ui_setMinute = SimbleeForMobile.drawText(140,400,45,tm.Minute);
+    ui_setSecond = SimbleeForMobile.drawText(240,400,40,tm.Second);
+
+    ui_hourStepper = SimbleeForMobile.drawStepper(25,420,80,0,24);
+    ui_minStepper = SimbleeForMobile.drawStepper(120,420,80,0,60);
+    ui_secStepper = SimbleeForMobile.drawStepper(215,420,80,0,60);
+    ui_yearStepper = SimbleeForMobile.drawStepper(25,350,80,2016,2017);
+    ui_monthStepper = SimbleeForMobile.drawStepper(120,350,80,1,12);
+    ui_dayStepper = SimbleeForMobile.drawStepper(215,350,80,1,31);
     
     SimbleeForMobile.updateText(ui_setHour,"HH");
     SimbleeForMobile.updateText(ui_setMinute,"MM");
