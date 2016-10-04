@@ -429,6 +429,7 @@ void ui()   // The function that defines the iPhone UI
 void ui_event(event_t &event)   // This is where we define the actions to occur on UI events
 {
     printEvent(event);
+    boolean clearFRAM = false;
     currentScreen = SimbleeForMobile.screen;    // If not, let's capture the current screen number
     if (event.id == ui_menuBar)                                          // This is the event handler for the menu bar
     {
@@ -514,12 +515,8 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
             }
             else if (event.id == ui_EraseMemSwitch && event.type == EVENT_RELEASE)  // This button allows us to erase the FRAM from the Admin screen
             {
-                SimbleeForMobile.updateText(ui_EraseMemStatus,"Started");
-                ResetFRAM();
-                SimbleeForMobile.updateText(ui_EraseMemStatus,"Erased");
-                controlRegisterValue = FRAMread8(CONTROLREGISTER);
-                FRAMwrite8(CONTROLREGISTER,signalClearCounts ^ controlRegisterValue);  // Toggle the start stop bit
-                
+                clearFRAM = true;
+                SimbleeForMobile.updateText(ui_UpdateStatus,"Press \"Update\" to confirm");
             }
             else if (event.id == ui_DebounceStepper) // Changing the debounce value on the Admin Tab
             {
@@ -563,6 +560,15 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                     GiveUpTheBus();
                     tm.Year = tm.Month = tm.Day = tm.Hour  = tm.Minute = tm.Second = 0;
                     Serial.println("Updating time");
+                }
+                if (clearFRAM)
+                {
+                    SimbleeForMobile.updateText(ui_EraseMemStatus,"Started");
+                    ResetFRAM();
+                    SimbleeForMobile.updateText(ui_EraseMemStatus,"Erased");
+                    controlRegisterValue = FRAMread8(CONTROLREGISTER);
+                    FRAMwrite8(CONTROLREGISTER,signalClearCounts ^ controlRegisterValue);  // Toggle the clear counts bit
+                    clearFRAM = false;
                 }
                 SimbleeForMobile.updateText(ui_UpdateStatus," ");
             }
