@@ -296,7 +296,7 @@ void setup()
     Serial.println("");
     cloud.userID = userID;
     SimbleeForMobile.deviceName = "Umstead";          // Device name
-    SimbleeForMobile.advertisementData = "Rte40" ;  // Name of data service
+    SimbleeForMobile.advertisementData = "Dev" ;  // Name of data service
     SimbleeForMobile.begin();
     
     Serial.println("Ready to go....");
@@ -325,7 +325,7 @@ void loop()
             Simblee_pinWakeCallback(AlarmPin, LOW, wakeUpAlarm); // configures pin 20 to wake up device on a Low signal
             TakeTheBus();
                 stateOfCharge = batteryMonitor.getSoC();
-                if (stateOfCharge >= 70)   // Update the value and color of the state of charge field
+                if (stateOfCharge >= 50)   // Update the value and color of the state of charge field
                 {
                   RTC.setAlarm(ALM2_MATCH_HOURS,00,00,7,0); // Set the moringing Alarm early for good battery
                 }
@@ -887,16 +887,14 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
     tmElements_t timeElement;
     breakTime(unixT, timeElement);
     dateTimePointer = dateTimeArray;
-
     if(timeElement.Month < 10) {
         dateTimeArray[0] = '0';
         dateTimeArray[1] = timeElement.Month+48;  // Stupid but the +48 gives the right ASCII code
     }
     else {
-        dateTimeArray[0] = int(timeElement.Month/10);
-        dateTimeArray[1] = (timeElement.Month%10);
+        dateTimeArray[0] = int(timeElement.Month/10)+48;
+        dateTimeArray[1] = (timeElement.Month%10)+48;
     }
-    dateTimeArray[2] =  '/';
     if(timeElement.Day < 10) {
         dateTimeArray[3] = '0';
         dateTimeArray[4] = timeElement.Day+48;  // Stupid but the +48 gives the right ASCII code
@@ -905,9 +903,7 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
         dateTimeArray[3] = int(timeElement.Day/10)+48;
         dateTimeArray[4] = (timeElement.Day%10)+48;
     }
-    dateTimeArray[5] =  '/';
     int currentYear = int(timeElement.Year)-30; // Year is displayed as 2016 not 16
-                   
     if(currentYear < 10) {
         dateTimeArray[6] = '0';
         dateTimeArray[7] = currentYear+48;  // Stupid but the +48 gives the right ASCII code
@@ -916,7 +912,6 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
         dateTimeArray[6] = int(currentYear/10)+48;
         dateTimeArray[7] = (currentYear%10)+48;
     }
-    dateTimeArray[8] =  ' ';
     if(timeElement.Hour < 10) {
         dateTimeArray[9] = '0';
         dateTimeArray[10] = timeElement.Hour+48;  // Stupid but the +48 gives the right ASCII code
@@ -925,7 +920,6 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
         dateTimeArray[9] = int(timeElement.Hour/10)+48;
         dateTimeArray[10] = (timeElement.Hour%10)+48;
     }
-    dateTimeArray[11] =  ':';
     if(timeElement.Minute < 10) {
         dateTimeArray[12] = '0';
         dateTimeArray[13] = timeElement.Minute+48;  // Stupid but the +48 gives the right ASCII code
@@ -934,7 +928,6 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
         dateTimeArray[12] = int(timeElement.Minute/10)+48;
         dateTimeArray[13] = (timeElement.Minute%10)+48;
     }
-    dateTimeArray[14] =  ':';
     if(timeElement.Second < 10) {
         dateTimeArray[15] = '0';
         dateTimeArray[16] = timeElement.Second+48;  // Stupid but the +48 gives the right ASCII code
@@ -943,8 +936,6 @@ void toArduinoTime(time_t unixT)   // Converts to date time for the UI
         dateTimeArray[15] = int(timeElement.Second/10)+48;
         dateTimeArray[16] = (timeElement.Second%10)+48;
     }
-    //Serial.print("Current Date and Time: ");
-    //Serial.println(dateTimePointer);
     SimbleeForMobile.updateText(ui_dateTimeField, dateTimePointer);
 }
 
