@@ -99,6 +99,12 @@
 #define DAILYBATTOFFSET 4
 #define HOURLYCOUNTOFFSET 4         // Offsets for the values in the hourly words
 #define HOURLYBATTOFFSET 6
+// Finally, here are the variables I want to change often and pull them all together here
+#define DEVICENAME "Umstead"
+#define SERVICENAME "Rte70"
+#define SOFTWARERELEASENUMBER "1.3.1"
+#define PARKCLOSES 20
+#define PARKOPENS 7
 
 
 // Include application, user and local libraries
@@ -175,9 +181,8 @@ int updateFrequency = 500;     // How often will we update the current screen
 int adminAccessKey = 27617;     // This is the code you need to enter to get to the admin field
 int adminAccessInput = 0;       // This is the user's input
 boolean clearFRAM = false;
-
+const char* releaseNumber = SOFTWARERELEASENUMBER;
 boolean adminUnlocked = false;  // Start with the Admin tab locked
-const char* releaseNumber = "1.30";
 
 // Variables for Simblee Display
 const char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
@@ -214,12 +219,14 @@ int accelInputValue;            // Raw sensitivity input (0-9);
 byte accelSensitivity;               // Hex variable for sensitivity
 
 // Variables for the control byte
-// Control Register  (8 - 6 Reserved, 5-Clear Counts, 4-Simblee Health, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
+// Control Register  (8 - 7 Reserved, 6- Simblee Reset Flag, 5-Clear Counts, 4-Simblee Sleep, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
 byte signalDebounceChange = B00000001;  // Mask for accessing the debounce bit
 byte signalSentitivityChange = B00000010;   // Mask for accessing the sensitivity bit
 byte toggleStartStop = B00000100;   // Mask for accessing the start / stop bit
-byte toggleSimbleeHealth = B00001000;        // Mask for accessing the Simblee Health bit
+byte signalSimbleeSleep = B00001000;        // Mask for accessing the Simblee Health bit
+byte clearSimbleeSleep = B11110111;         // Mask to clear the Sleep bit
 byte signalClearCounts = B00010000; // Flag to have the Arduino clear current counts
+byte signalSimbleeReset = B00100000;    // Sets the reset flag
 byte controlRegisterValue;  // Current value of the control register
 
 // include newlib printf float support (%f used in sprintf below)
@@ -245,8 +252,8 @@ void setup()
     printf("Module ESN is 0x%08x\n", cloud.myESN);
     Serial.println("");
     cloud.userID = userID;
-    SimbleeForMobile.deviceName = "Umstead";          // Device name
-    SimbleeForMobile.advertisementData = "Dev" ;  // Name of data service
+    SimbleeForMobile.deviceName = DEVICENAME;          // Device name
+    SimbleeForMobile.advertisementData = SERVICENAME;  // Name of data service
     SimbleeForMobile.begin();
     
     Serial.println("Ready to go....");
@@ -275,18 +282,27 @@ void loop()
                 stateOfCharge = batteryMonitor.getSoC();
                 if (stateOfCharge >= 50)   // Update the value and color of the state of charge field
                 {
-                  RTC.setAlarm(ALM2_MATCH_HOURS,00,00,7,0); // Set the moringing Alarm early for good battery
+                    RTC.setAlarm(ALM2_MATCH_HOURS,00,00,PARKOPENS,0); // Set the moringing Alarm early for good battery
+                    Serial.print("Battery good - waking up at 7:00am");
                 }
-                else RTC.setAlarm(ALM2_MATCH_HOURS,00,00,12,0); // Set the moringing Alarm later for low battery
+                else
+                {
+                    RTC.setAlarm(ALM2_MATCH_HOURS,00,00,12,0); // Set the moringing Alarm later for low battery
+                    Serial.print("Battery weak - waking up at noon");
+                }
             GiveUpTheBus();
             alarmInterrupt = false;  // Now we can clear the interrupt flag
-            Serial.println("Going to Sleep");
+            Serial.println("... goodnight going to Sleep");
+            controlRegisterValue = FRAMread8(CONTROLREGISTER);
+            FRAMwrite8(CONTROLREGISTER, controlRegisterValue | signalSimbleeSleep);
             delay(1000);
             Simblee_systemOff();  // Very low power - only comes back with interrupt
         }
         else
         {
             Serial.println("Time to wake up");
+            controlRegisterValue = FRAMread8(CONTROLREGISTER);
+            FRAMwrite8(CONTROLREGISTER, controlRegisterValue & clearSimbleeSleep);
         }
     }
     if (millis() >= lastupdate + updateFrequency)
@@ -294,11 +310,6 @@ void loop()
         SimbleeForMobile.process(); // process must be called in the loop for SimbleeForMobile
         //cloud.process();            // process must be called in the loop for Simblee Cloud
         controlRegisterValue = FRAMread8(CONTROLREGISTER);
-        if (controlRegisterValue & toggleSimbleeHealth)
-        {
-            FRAMwrite8(CONTROLREGISTER,controlRegisterValue ^ toggleSimbleeHealth);
-            Serial.println("Resetting the health flag");
-        }
         if (SimbleeForMobile.connected && SimbleeForMobile.screen == 1)
         {
             if (SimbleeForMobile.updatable) updateCurrentScreen();
@@ -324,6 +335,9 @@ void SimbleeForMobile_onDisconnect()    // Can clean up resources once we discon
 {
     adminUnlocked = false;      // Clear the Admin Unlock values on disconnect
     adminAccessInput = 0;
+    Serial.println("Disconnecting setting the reset flag");
+    controlRegisterValue = FRAMread8(CONTROLREGISTER);  // Get the latest control register value
+    FRAMwrite8(CONTROLREGISTER, controlRegisterValue | signalSimbleeReset); // This will set the SimbleeReset Flag on disconect
 }
 
 void ui()   // The function that defines the iPhone UI
