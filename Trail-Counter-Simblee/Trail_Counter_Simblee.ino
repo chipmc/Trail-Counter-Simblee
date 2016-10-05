@@ -171,13 +171,13 @@ unsigned int dailyPersonCount = 0;   //  daily counter
 
 // Interface vairables
 unsigned int lastupdate = 0;    // For when we are on the current screen
-int updateFrequency = 1000;     // How often will we update the current screen
+int updateFrequency = 500;     // How often will we update the current screen
 int adminAccessKey = 27617;     // This is the code you need to enter to get to the admin field
 int adminAccessInput = 0;       // This is the user's input
 boolean clearFRAM = false;
 
 boolean adminUnlocked = false;  // Start with the Admin tab locked
-const char* releaseNumber = "1.24";
+const char* releaseNumber = "1.30";
 
 // Variables for Simblee Display
 const char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
@@ -193,7 +193,6 @@ int ui_DebounceStepper;  // Slider ID for adjusting debounce on Admin Tab
 int ui_SensitivityStepper;   // Slider ID for adjusting sensitivity on Admin Tab
 int ui_SensitivityValue;    // Provide clear value of the sensitivity
 int ui_DebounceValue;       // Provide a clear value of the debounce setting
-int ui_LEDswitch;   // Used to turn on and off the LEDs
 int ui_UpdateButton;  // Update button ID on Admin Tab
 int ui_UpdateStatus;    // Indicates if an update is pending
 int ui_dateTimeField;  // Text field on Current Tab
@@ -215,11 +214,11 @@ int accelInputValue;            // Raw sensitivity input (0-9);
 byte accelSensitivity;               // Hex variable for sensitivity
 
 // Variables for the control byte
-// Control Register  (8 - 6 Reserved, 5-Clear Counts, 4-Toggle LEDs, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
+// Control Register  (8 - 6 Reserved, 5-Clear Counts, 4-Simblee Health, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
 byte signalDebounceChange = B00000001;  // Mask for accessing the debounce bit
 byte signalSentitivityChange = B00000010;   // Mask for accessing the sensitivity bit
 byte toggleStartStop = B00000100;   // Mask for accessing the start / stop bit
-byte toggleLEDs = B00001000;        // Mask for accessing the LED on off bit
+byte toggleSimbleeHealth = B00001000;        // Mask for accessing the Simblee Health bit
 byte signalClearCounts = B00010000; // Flag to have the Arduino clear current counts
 byte controlRegisterValue;  // Current value of the control register
 
@@ -230,7 +229,8 @@ asm(".global _printf_float");
 void setup()
 {
     Wire.beginOnPins(SCLpin,SDApin);  // Not sure if this talks to the i2c bus or not - just to be safe...
-    Serial.begin(9600);
+    Serial.begin(9600);     //  Access to the terminal
+    fram.begin();           //  Access to the FRAM Chip
     
     // Unlike Arduino Simblee does not pre-define inputs
     pinMode(TalkPin, INPUT);  // Shared Talk line
@@ -238,60 +238,8 @@ void setup()
     pinMode(AlarmPin,INPUT);    // Shared DS3231 Alarm Pin
     attachPinInterrupt(AlarmPin,wakeUpAlarm,LOW);    // this will trigger an alarm that will put Simblee in low power mode until morning
 
-    enable32Khz(1); // turns on the 32k squarewave - to moderate access to the i2c bus
-    
-    TakeTheBus(); // Need the bus as we access the FRAM
-  
-        if (fram.begin()) {  // you can stick the new i2c addr in here, e.g. begin(0x51);
-            Serial.println("Found I2C FRAM");
-        }
-        else {
-            Serial.println("No I2C FRAM found ... check your connections\r\n");
-            BlinkForever();
-        }
-    GiveUpTheBus(); // OK, from now on we will use the FRAM functions which have buss management built in
-
-    // Check to see if the memory map in the sketch matches the data on the chip
-    if (FRAMread8(VERSIONADDR) != VERSIONNUMBER) {
-        Serial.print(F("FRAM Version Number: "));
-        Serial.println(FRAMread8(VERSIONADDR));
-        Serial.read();
-        Serial.println(F("Memory/Sketch mismatch! Erase FRAM? (Y/N)"));
-
-        while (!Serial.available());
-        switch (Serial.read()) {    // Give option to erase and reset memory
-            case 'Y':
-                ResetFRAM();
-                break;
-            case 'y':
-                ResetFRAM();
-                break;
-            default:
-                Serial.println(F("Cannot proceed"));
-                BlinkForever();
-        }
-    }
-    
-    TakeTheBus();
-        batteryMonitor.reset();               // Initialize the battery monitor
-        batteryMonitor.quickStart();
-        setSyncProvider(RTC.get);              // Set up the clock as we will control it and the alarms here
-        Serial.println(F("RTC Sync"));
-        if (timeStatus() != timeSet) {
-            Serial.println(F(" time sync fail!"));
-            BlinkForever();
-        }
-        // We need to set an Alarm or Two in order to ensure that the Simblee is put to sleep at night
-        RTC.squareWave(SQWAVE_NONE);            //Disable the default square wave of the SQW pin.
-        RTC.alarm(ALARM_1);                     // This will clear the Alarm flags
-        RTC.alarm(ALARM_2);                     // This will clear the Alarm flags
-        RTC.setAlarm(ALM1_MATCH_HOURS,00,00,20,0); // Set the evening Alarm
-        RTC.setAlarm(ALM2_MATCH_HOURS,00,00,7,0); // Set the morning Alarm
-        //RTC.setAlarm(ALM1_MATCH_MINUTES,00,42,00,0); // Start Alarm - for debugging
-        //RTC.setAlarm(ALM2_MATCH_MINUTES,00,43,00,0); // Wake Alarm - for debugging
-        RTC.alarmInterrupt(ALARM_2, true);      // Connect the Interrupt to the Alarms (or not)
-        RTC.alarmInterrupt(ALARM_1, true);
-    GiveUpTheBus();
+    Serial.println(F("Startup delay..."));
+    delay(100); // This is to make sure that the Arduino boots first as it initializes the various devices
     
     // Set up the Simblee Mobile App and Simblee Cloud
     printf("Module ESN is 0x%08x\n", cloud.myESN);
@@ -307,8 +255,6 @@ void setup()
 // Add loop code
 void loop()
 {
-    SimbleeForMobile.process(); // process must be called in the loop for SimbleeForMobile
-    //cloud.process();            // process must be called in the loop for Simblee Cloud
     if (alarmInterrupt)         // Here is where we manage the Simblee's sleep and wake cycles
     {
         TakeTheBus();
@@ -342,18 +288,22 @@ void loop()
         {
             Serial.println("Time to wake up");
         }
-
     }
-    if (SimbleeForMobile.connected && SimbleeForMobile.screen == 1)
+    if (millis() >= lastupdate + updateFrequency)
     {
-        if (millis() >= lastupdate + updateFrequency)
+        SimbleeForMobile.process(); // process must be called in the loop for SimbleeForMobile
+        //cloud.process();            // process must be called in the loop for Simblee Cloud
+        controlRegisterValue = FRAMread8(CONTROLREGISTER);
+        if (controlRegisterValue & toggleSimbleeHealth)
         {
-            lastupdate = millis();
-            if (SimbleeForMobile.updatable)
-            {
-                updateCurrentScreen();
-            }
+            FRAMwrite8(CONTROLREGISTER,controlRegisterValue ^ toggleSimbleeHealth);
+            Serial.println("Resetting the health flag");
         }
+        if (SimbleeForMobile.connected && SimbleeForMobile.screen == 1)
+        {
+            if (SimbleeForMobile.updatable) updateCurrentScreen();
+        }
+        lastupdate = millis();
     }
 }
 
@@ -374,11 +324,6 @@ void SimbleeForMobile_onDisconnect()    // Can clean up resources once we discon
 {
     adminUnlocked = false;      // Clear the Admin Unlock values on disconnect
     adminAccessInput = 0;
-    controlRegisterValue = FRAMread8(CONTROLREGISTER);
-    if (toggleLEDs & controlRegisterValue == 8)       // Check to see if the LED bit is set on
-    {
-        FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // If so, it will turn off the LED
-    }
 }
 
 void ui()   // The function that defines the iPhone UI
@@ -431,8 +376,8 @@ void ui()   // The function that defines the iPhone UI
 void ui_event(event_t &event)   // This is where we define the actions to occur on UI events
 {
     printEvent(event);
-    currentScreen = SimbleeForMobile.screen;    // If not, let's capture the current screen number
-    if (event.id == ui_menuBar)                                          // This is the event handler for the menu bar
+    currentScreen = SimbleeForMobile.screen;    // As the event ids are specific to each screen, we have to switch on screen
+    if (event.id == ui_menuBar)                 // This is the event handler for the menu bar
     {
         switch(event.value)
         {
@@ -473,12 +418,6 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                     adminUnlocked = false;
                     
                 }
-            }
-            else if (event.id == ui_LEDswitch) // LED on off switch on the Current Status Screen
-            {
-                controlRegisterValue = FRAMread8(CONTROLREGISTER);
-                FRAMwrite8(CONTROLREGISTER, toggleLEDs ^ controlRegisterValue); // Toggle the LED bit
-                Serial.println("Toggled the LED bit");
             }
             /*
             else if (event.id == ui_sendCloudSwitch)
@@ -631,9 +570,6 @@ void createCurrentScreen() // This is the screen that displays current status in
     ui_StartStopStatus = SimbleeForMobile.drawText(200, 220, " ");
     ui_adminLockIcon = SimbleeForMobile.drawText(40,290,"Admin Code:",RED);
     ui_adminAccessField = SimbleeForMobile.drawTextField(132,285,80,adminAccessInput);
-    SimbleeForMobile.drawText(40,356, "Indicator Lights:");
-    ui_LEDswitch = SimbleeForMobile.drawSwitch(170,350);
-    SimbleeForMobile.setEvents(ui_LEDswitch,EVENT_PRESS);
     //ui_sendCloudSwitch = SimbleeForMobile.drawButton(70,400,150,"Send to Cloud");
     //SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
     SimbleeForMobile.drawText(10,(SimbleeForMobile.screenHeight-20),"Version:");
@@ -686,11 +622,6 @@ void updateCurrentScreen() // Since we have to update this screen three ways: cr
         SimbleeForMobile.updateValue(ui_adminAccessField,adminAccessInput);
         SimbleeForMobile.updateColor(ui_adminLockIcon,GREEN);
     }
-    
-    if ((controlRegisterValue & toggleLEDs) >> 3) {    // Show the state of the LED switch
-        SimbleeForMobile.updateValue(ui_LEDswitch,1);
-    }
-    else SimbleeForMobile.updateValue(ui_LEDswitch,0);
 }
 
 void createDailyScreen() // This is the screen that displays current status information

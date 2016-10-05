@@ -48,7 +48,7 @@ Hardware setup:
 - Indicator LED on pin 4
 - accelSensitivity and debounce are set via terminal and stored in FRAM
 - Inverter used to invert the interrupt from the accelerometer and send to INT2PIN
-- Adafruit Bluetooth UART friend used to provide remote serial support
+
 
 Memory Map v7
 
@@ -57,10 +57,10 @@ Byte     Value
 The first word is for system data
 0        Memory Map Version (this program expects 2)
 1        accelSensitivity
-2-3       Delay
+2-3      Delay (16-bit)  -- This could likely be reduced to 8-bits wihtout much issue
 4        Daily Count Pointer
-5-5      Current Hourly Count Pointer (16-bit number)
-7        Control Register  (8 - 5 Reserved, 4- LEDs, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
+5-6      Current Hourly Count Pointer (16-bit number)
+7        Control Register  (8 - 5 Reserved, 4- Simblee Health, 3-Start / Stop Test, 2-Set Sensitivity, 1-Set Delay)
 The second word is for storing the current count data
 8-9      Current Hourly Count (16-bit)
 10-11    Current Daily Count (16-bit)
