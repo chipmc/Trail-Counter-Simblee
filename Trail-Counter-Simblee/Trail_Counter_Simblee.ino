@@ -101,8 +101,8 @@
 #define HOURLYBATTOFFSET 6
 // Finally, here are the variables I want to change often and pull them all together here
 #define DEVICENAME "Umstead"
-#define SERVICENAME "Rte70"
-#define SOFTWARERELEASENUMBER "1.3.1"
+#define SERVICENAME "Dev"
+#define SOFTWARERELEASENUMBER "1.3.2"
 #define PARKCLOSES 20
 #define PARKOPENS 7
 
