@@ -8,7 +8,7 @@
 # All rights reserved
 #
 #
-# Last update: Oct 08, 2015 release 5.3.2
+# Last update: Oct 10, 2015 release 5.3.3
 
 
 
@@ -245,6 +245,7 @@ ifndef USER_LIBS_LIST
     USER_LIBS_LIST   = $(subst $(USER_LIB_PATH)/,,$(filter-out $(EXCLUDE_LIST),$(s202)))
 endif
 
+ifneq ($(MAKECMDGOALS),clean)
 ifeq ($(USER_LIBS_LOCK),)
 ifneq ($(USER_LIBS_LIST),0)
     s203             = $(patsubst %,$(USER_LIB_PATH)/%,$(USER_LIBS_LIST))
@@ -263,6 +264,7 @@ ifneq ($(USER_LIBS_LIST),0)
 
     USER_OBJS        = $(patsubst $(USER_LIB_PATH)/%.cpp,$(OBJDIR)/user/%.cpp.o,$(USER_LIB_CPP_SRC))
     USER_OBJS       += $(patsubst $(USER_LIB_PATH)/%.c,$(OBJDIR)/user/%.c.o,$(USER_LIB_C_SRC))
+endif
 endif
 endif
 
@@ -305,12 +307,13 @@ LOCAL_OBJS      = $(patsubst $(LOCAL_LIB_PATH)/%,$(OBJDIR)/%,$(filter-out %/$(PR
 #
 LOCAL_ARCHIVES  = $(wildcard $(patsubst %,%/*.a,$(LOCAL_LIBS))) $(wildcard $(LOCAL_LIB_PATH)/*.a) # */
 
-# Check against $(BOARD_TAG).board
+# Check against .board
 #
+ifneq ($(trim $(LOCAL_LIBS)),)
 ifneq ($(MAKECMDGOALS),archive)
 ifneq ($(MAKECMDGOALS),unarchive)
-    LOCAL_TARGETS   = $(shell find $(LOCAL_LIBS) -name *.board -exec basename {} .board \;)
-    LOCAL_RESULT    = $(filter-out $(BOARD_TAG),$(LOCAL_TARGETS))
+    LOCAL_TARGETS   := $(shell find $(LOCAL_LIBS) -name \*.board -exec basename {} .board \;)
+    LOCAL_RESULT    := $(filter-out $(BOARD_TAG),$(LOCAL_TARGETS))
 
     ifneq ($(trim $(LOCAL_ARCHIVES)),)
     ifeq ($(LOCAL_TARGETS),)
@@ -324,6 +327,7 @@ ifneq ($(MAKECMDGOALS),unarchive)
         $(info Expected $(BOARD_TAG))
         $(error One or more pre-compiled libraries are not compatible with $(BOARD_TAG))
     endif
+endif
 endif
 endif
 
@@ -1776,6 +1780,5 @@ end_fast:
 
 # cat Step2.mk | grep -e "^[A-z]\+:" | cut -d: -f1
 .PHONY:	all boards build changed clean compile depends end_all end_build end_fast end_make fast info ispload make message_all message_build message_compile message_fast message_make message_upload prepare raw_upload reset serial serial_option size upload archive do_archive unarchive
-
 
 

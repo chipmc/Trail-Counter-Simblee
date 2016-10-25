@@ -8,23 +8,22 @@
 # All rights reserved
 #
 #
-# Last update: Jan 16, 2016 release 4.1.7
+# Last update: Oct 17, 2016 release 5.3.4
 
 
 
 # chipKIT specifics
 # ----------------------------------
-# Dirty implementation for MPIDE release 0023-macosx-20130715
 # OPT_SYSTEM_INTERNAL is defined in main.cpp but used in wiring.h
 #
 PLATFORM         := chipKIT
 BUILD_CORE       := pic32
 APPLICATION_PATH := $(CHIPKIT_PATH)
-PLATFORM_VERSION := $(CHIPKIT_RELEASE) for Arduino 1.6.5
+PLATFORM_VERSION := $(CHIPKIT_RELEASE) for Arduino 1.6.12
 
 HARDWARE_PATH     = $(APPLICATION_PATH)/hardware/pic32/$(CHIPKIT_RELEASE)
 #mp001             = $(shell cat $(APPLICATION_PATH)/lib/version.txt | cut -d- -f1 | sed 's/^0*//')
-PLATFORM_TAG      = ARDUINO=10610 MPIDE=$(CHIPKIT_RELEASE) MPIDEVER=16777998 EMBEDXCODE=$(RELEASE_NOW)
+PLATFORM_TAG      = ARDUINO=10612 MPIDE=$(CHIPKIT_RELEASE) IDE=Arduino MPIDEVER=16777998 EMBEDXCODE=$(RELEASE_NOW) ARDUINO_ARCH_PIC32
 
 TOOL_CHAIN_PATH   = $(CHIPKIT_PATH)/tools/pic32-tools/$(PIC32_GCC_RELEASE)
 OTHER_TOOLS_PATH  = $(CHIPKIT_PATH)/tools/pic32prog/$(PIC32_PROG_RELEASE)
@@ -42,12 +41,6 @@ ifeq ($(call PARSE_FILE,$(BOARD_TAG),name,$(BOARDS_TXT)),)
     BOARDS_TXT   := $(shell grep -rnwls $(HARDWARE_PATH)/variants -e '$(BOARD_TAG).name')
 endif
 
-#BOARDS_TXT       := $(shell grep -rnwls $(MPIDE_PATH)/hardware/pic32/variants -e '$(BOARD_TAG).name')
-
-#BOARDS_TXT       := $(APPLICATION_PATH)/hardware/pic32/boards.txt
-#ifeq ($(call PARSE_FILE,$(BOARD_TAG),name,$(BOARDS_TXT)),)
-#    BOARDS_TXT   := $(APPLICATION_PATH)/hardware/pic32/variants/picadillo_35t/boards.txt
-#endif
 
 # Sketchbook/Libraries path
 # wildcard required for ~ management
@@ -130,7 +123,12 @@ BOARD    = $(call PARSE_BOARD,$(BOARD_TAG),board)
 ifeq ($(BOARD),)
     BOARD    = $(call PARSE_BOARD,$(BOARD_TAG),build.board)
 endif
+
 LDSCRIPT = $(call PARSE_BOARD,$(BOARD_TAG),ldscript)
+LDCOMMON = $(call PARSE_BOARD,$(BOARD_TAG),ldcommon)
+ifeq ($(LDCOMMON),)
+    LDCOMMON := chipKIT-application-COMMON.ld
+endif
 VARIANT  = $(call PARSE_BOARD,$(BOARD_TAG),build.variant)
 #VARIANT_PATH = $(APPLICATION_PATH)/hardware/pic32/variants/$(VARIANT)
 VARIANT_PATH = $(HARDWARE_PATH)/variants/$(VARIANT)
@@ -174,11 +172,9 @@ INCLUDE_PATH   += $(OBJDIR)
 #
 # Common CPPFLAGS for gcc, g++, assembler and linker
 #
-#CPPFLAGS     = $(OPTIMISATION) -c -mno-smart-io -w
 CPPFLAGS     = $(OPTIMISATION)
 CPPFLAGS    += -$(MCU_FLAG_NAME)=$(MCU) -DF_CPU=$(F_CPU)
 CPPFLAGS    += $(addprefix -D, $(PLATFORM_TAG)) -D$(BOARD)
-#CPPFLAGS    += -I$(CORE_LIB_PATH) -I$(VARIANT_PATH) -I$(OBJDIR) -I.
 CPPFLAGS    += $(addprefix -I, $(INCLUDE_PATH))
 
 # Specific CFLAGS for gcc only
@@ -201,7 +197,7 @@ ifeq ($(m201),)
     m201    := -O2::-c::-mno-smart-io::-w::-ffunction-sections::-fdata-sections::-G1024::-g::-mdebugger::-Wcast-align::-fno-short-double
 endif
 m202         = $(shell echo '$(m201)' | sed 's/::/ /g')
-CXXFLAGS     = $(filter-out -O%,$(m202))
+CXXFLAGS     = $(filter-out -O%,$(m202)) -ftoplevel-reorder
 
 # Specific ASFLAGS for gcc assembler only
 # gcc assembler uses CPPFLAGS and ASFLAGS
@@ -215,13 +211,7 @@ ASFLAGS      = -g1 -Wa,--gdwarf-2
 #
 # chipKIT-application-COMMON.ld added by MPIDE release 0023-macosx-20130715
 LDFLAGS    = $(OPTIMISATION) -Wl,--gc-sections -$(MCU_FLAG_NAME)=$(MCU) -DF_CPU=$(F_CPU)
-ifeq ($(MCU),32MZ2048ECG100)
-    LDFLAGS   += -T $(VARIANT_PATH)/$(LDSCRIPT) -T $(CORE_LIB_PATH)/chipKIT-application-COMMON-MZ.ld
-else ifeq ($(MCU),32MX695F512L)
-    LDFLAGS   += -T $(VARIANT_PATH)/$(LDSCRIPT) -T $(CORE_LIB_PATH)/chipKIT-application-COMMON.ld
-else
-    LDFLAGS   += -T $(CORE_LIB_PATH)/$(LDSCRIPT) -T $(CORE_LIB_PATH)/chipKIT-application-COMMON.ld
-endif
+LDFLAGS   += -T $(VARIANT_PATH)/$(LDSCRIPT) -T $(CORE_LIB_PATH)/$(LDCOMMON)
 LDFLAGS   += -mdebugger -mno-peripheral-libs -nostartfiles
 
 

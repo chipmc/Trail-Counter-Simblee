@@ -8,7 +8,7 @@
 # All rights reserved
 #
 #
-# Last update: Jul 22, 2016 release 5.1.0
+# Last update: Oct 10, 2016 release 5.3.3
 
 
 
@@ -934,12 +934,11 @@ endif
 # List of sub-paths to be excluded
 #
 EXCLUDE_NAMES  = Example example Examples examples Archive archive Archives archives Documentation documentation Reference reference
-EXCLUDE_NAMES += ArduinoTestSuite
+EXCLUDE_NAMES += ArduinoTestSuite tests
 EXCLUDE_NAMES += $(EXCLUDE_LIBS)
 EXCLUDE_LIST   = $(addprefix %,$(EXCLUDE_NAMES))
 
 # Step 2
 #
 include $(MAKEFILE_PATH)/Step2.mk
-
 

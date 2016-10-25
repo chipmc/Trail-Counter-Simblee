@@ -72,7 +72,6 @@
     #error Platform not defined
 #endif // end IDE
 
-
 // Set parameters
 //These defines let me change the memory map without hunting through the whole program
 #define VERSIONNUMBER 7       // Increment this number each time the memory map is changed
@@ -101,10 +100,11 @@
 #define HOURLYBATTOFFSET 6
 // Finally, here are the variables I want to change often and pull them all together here
 #define DEVICENAME "Umstead"
-#define SERVICENAME "Dev"
+#define SERVICENAME "Rte70"
 #define SOFTWARERELEASENUMBER "1.3.2"
 #define PARKCLOSES 20
 #define PARKOPENS 7
+
 
 
 // Include application, user and local libraries
@@ -162,6 +162,8 @@ void enable32Khz(uint8_t enable); // Need to turn on the 32k square wave for bus
 int SCLpin = 13;    // Simblee i2c Clock pin
 int SDApin = 14;    // Simblee i2c Data pin
 int AlarmPin = 20;  // This is the open-drain line for signaling an Alarm
+int resetPin = 30;  // This pin can reset the Arduino
+int intPin = 2;   // This is the pin which wakes the Arduino
 
 // Battery monitor
 float stateOfCharge = 0;    // Initialize state of charge
@@ -183,6 +185,9 @@ int adminAccessInput = 0;       // This is the user's input
 boolean clearFRAM = false;
 const char* releaseNumber = SOFTWARERELEASENUMBER;
 boolean adminUnlocked = false;  // Start with the Admin tab locked
+int resetCount = 0; // How many times has the Simblee reset the Arduino
+unsigned long resetDelay = 20000;   // Don't want to keep resetting the Arduino
+unsigned long lastReset;
 
 // Variables for Simblee Display
 const char *titles[] = { "Current", "Daily", "Hourly", "Admin" };
@@ -243,6 +248,8 @@ void setup()
     pinMode(TalkPin, INPUT);  // Shared Talk line
     pinMode(The32kPin, INPUT);   // Shared 32kHz line from clock
     pinMode(AlarmPin,INPUT);    // Shared DS3231 Alarm Pin
+    pinMode(intPin,INPUT);  // Need to watch this pin
+    pinMode(resetPin,OUTPUT);   // If needed, we can reset the Arduino
     attachPinInterrupt(AlarmPin,wakeUpAlarm,LOW);    // this will trigger an alarm that will put Simblee in low power mode until morning
 
     Serial.println(F("Startup delay..."));
@@ -315,6 +322,20 @@ void loop()
             if (SimbleeForMobile.updatable) updateCurrentScreen();
         }
         lastupdate = millis();
+        if (!digitalRead(intPin)) // If this pin is low, then the Arduino should service the interrupt - unless it is locked up....
+        {
+            NonBlockingDelay(500);  // Give the Arduino a half-second to recover itself
+            if(!digitalRead(intPin) && millis() >> resetDelay + lastReset) // OK, I guess the Arudino is Frozen
+            {
+                lastReset = millis();
+                digitalWrite(resetPin,LOW);
+                delay(100);      // Bring this line low for 100msec to reset
+                digitalWrite(resetPin,HIGH);
+                resetCount++;   // Increment the reset count
+                Serial.print("Arduino reset count: ");
+                Serial.println(resetCount);
+            }
+        }
     }
 }
 
@@ -433,22 +454,22 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
                     
                 }
             }
-            /*
-            else if (event.id == ui_sendCloudSwitch)
-            {
-                if(cloud.connect())
-                {
-                    Serial.println("Simblee Cloud Connected");
-                }
-                else Serial.println("Simblee Cloud Not Connected");
-                if (cloud.active())
-                {
-                    cloud.send(destESN, "0", 1);    // send start message (ie: start the timer on the receiving side)
-                    Serial.println("Cloud data sent");
-                }
-                else Serial.println("Simblee Cloud not Active - no data sent");
-             }
-            */
+            //
+            //else if (event.id == ui_sendCloudSwitch)
+            //{
+            //    if(cloud.connect())
+            //    {
+            //        Serial.println("Simblee Cloud Connected");
+            //    }
+            //    else Serial.println("Simblee Cloud Not Connected");
+            //    if (cloud.active())
+            //    {
+            //        cloud.send(destESN, "0", 1);    // send start message (ie: start the timer on the receiving side)
+            //        Serial.println("Cloud data sent");
+            //    }
+            //    else Serial.println("Simblee Cloud not Active - no data sent");
+            // }
+            //
 
             break;
         case 2:// The Daily Screen
@@ -918,4 +939,5 @@ void enable32Khz(uint8_t enable)  // Need to turn on the 32k square wave for bus
     Wire.write(sreg);
     Wire.endTransmission();
 }
+
 
