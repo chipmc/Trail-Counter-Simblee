@@ -101,7 +101,7 @@
 // Finally, here are the variables I want to change often and pull them all together here
 #define DEVICENAME "Umstead"
 #define SERVICENAME "Rte70"
-#define SOFTWARERELEASENUMBER "1.3.2"
+#define SOFTWARERELEASENUMBER "1.3.4"
 #define PARKCLOSES 20
 #define PARKOPENS 7
 
