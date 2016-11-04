@@ -100,8 +100,8 @@
 #define HOURLYBATTOFFSET 6
 // Finally, here are the variables I want to change often and pull them all together here
 #define DEVICENAME "Umstead"
-#define SERVICENAME "Rte70"
-#define SOFTWARERELEASENUMBER "1.3.4"
+#define SERVICENAME "Dev"
+#define SOFTWARERELEASENUMBER "1.3.6"
 #define PARKCLOSES 20
 #define PARKOPENS 7
 
@@ -392,9 +392,9 @@ void ui()   // The function that defines the iPhone UI
             }
             // Prepopulate the debounce value
             debounce = FRAMread16(DEBOUNCEADDR);
-            SimbleeForMobile.updateValue(ui_DebounceStepper, debounce);
+            SimbleeForMobile.updateValue(ui_DebounceStepper, debounce/50);
             char debounceBuffer[5];   // Should be enough for three digits and ms
-            snprintf(debounceBuffer, 6, "%ims",debounce);
+            snprintf(debounceBuffer, 7, "%ims",debounce);
             SimbleeForMobile.updateText(ui_DebounceValue,debounceBuffer);
             // Prepopulate the sensitivity value (0-10 on the interface but 10-0 into memory
             accelInputValue = 10 - FRAMread8(SENSITIVITYADDR);  // To a user, increased sensitivity is increased numerical value
@@ -495,9 +495,9 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
             }
             else if (event.id == ui_DebounceStepper) // Changing the debounce value on the Admin Tab
             {
-                debounce = event.value;
-                char debounceBuffer[5];   // Should be enough for three digits and ms
-                snprintf(debounceBuffer, 6, "%ims",debounce);
+                debounce = event.value*50;
+                char debounceBuffer[6];   // Should be enough for three digits and ms
+                snprintf(debounceBuffer, 7, "%ims",debounce);
                 SimbleeForMobile.updateText(ui_DebounceValue,debounceBuffer);
                 SimbleeForMobile.updateText(ui_UpdateStatus,"Press \"Update\" to confirm");
             }
@@ -589,6 +589,8 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
 
 void createCurrentScreen() // This is the screen that displays current status information
 {
+    char IDBuffer[32];   // Should be enough for 16 chars of service and name, version and text
+    
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
     ui_menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(ui_menuBar, 0);
@@ -607,8 +609,8 @@ void createCurrentScreen() // This is the screen that displays current status in
     ui_adminAccessField = SimbleeForMobile.drawTextField(132,285,80,adminAccessInput);
     //ui_sendCloudSwitch = SimbleeForMobile.drawButton(70,400,150,"Send to Cloud");
     //SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
-    SimbleeForMobile.drawText(10,(SimbleeForMobile.screenHeight-20),"Version:");
-    SimbleeForMobile.drawText(80,(SimbleeForMobile.screenHeight-20),releaseNumber);
+    snprintf(IDBuffer, 33,"%s - %s at version: %s",DEVICENAME,SERVICENAME,SOFTWARERELEASENUMBER);   // Identifies Device on Current screen
+    SimbleeForMobile.drawText(10,(SimbleeForMobile.screenHeight-20),IDBuffer);
     SimbleeForMobile.endScreen();
 }
 
@@ -668,10 +670,14 @@ void createDailyScreen() // This is the screen that displays current status info
     int row = 1;
     int dailyCount = 0;
     char battBuffer[4];   // Should be enough 3 digits plus % symbol
-
+    char IDBuffer[19];   // Should be enough for 16 chars of service and name with separator
+    
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
     ui_menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(ui_menuBar, 1);
+    
+    snprintf(IDBuffer, 20,"%s - %s",DEVICENAME,SERVICENAME);   // Identifies Device on Current screen
+    SimbleeForMobile.drawText(110,40,IDBuffer);
     
     SimbleeForMobile.drawText(xAxis, yAxis,"Date");
     SimbleeForMobile.drawText(xAxis+21*columnWidth, yAxis,"Count");
@@ -707,15 +713,19 @@ void createHourlyScreen() // This is the screen that displays today's hourly cou
     int hourIndex = FRAMread16(HOURLYPOINTERADDR);
     char battBuffer[4];   // Should be enough 3 digits plus % symbol
     char hourBuffer[5];   // Should be enough for 4 hour and :00
-
+    char IDBuffer[19];   // Should be enough for 16 chars of service and name with separator
+    
     TakeTheBus();
         t = RTC.get();                  // First we will establish the time
     GiveUpTheBus();
     time_t mighnightUnixT = findMidnight(t);   // This is the midnight that preceeds today's day
-    
+
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
     ui_menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
     SimbleeForMobile.updateValue(ui_menuBar, 2);
+
+    snprintf(IDBuffer, 20,"%s - %s",DEVICENAME,SERVICENAME);   // Identifies Device on Current screen
+    SimbleeForMobile.drawText(110,40,IDBuffer);
     
     SimbleeForMobile.drawText(xAxis, yAxis,"Hour");
     SimbleeForMobile.drawText(xAxis+21*columnWidth, yAxis,"Count");
@@ -767,7 +777,7 @@ void createAdminScreen() // This is the screen that displays current status info
     
     SimbleeForMobile.drawText(25,200,"Debounce:");
     ui_DebounceValue = SimbleeForMobile.drawText(60,220,"");
-    ui_DebounceStepper = SimbleeForMobile.drawStepper(25,240,100,0,500);
+    ui_DebounceStepper = SimbleeForMobile.drawStepper(25,240,100,0,20);
 
  
     SimbleeForMobile.drawText(190,200,"Sensitivity:");

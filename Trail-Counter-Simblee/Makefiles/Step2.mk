@@ -8,7 +8,7 @@
 # All rights reserved
 #
 #
-# Last update: Oct 10, 2015 release 5.3.3
+# Last update: Oct 28, 2016 release 5.3.6
 
 
 
@@ -1143,7 +1143,7 @@ compile:	info message_compile $(OBJDIR) $(TARGET_HEXBIN) $(TARGET_EEP) size
 
 
 prepare:
-		@if [ -f $(UTILITIES_PATH)/embedXcode_prepare ]; then $(UTILITIES_PATH)/embedXcode_prepare $(SCOPE_FLAG) "$(USER_LIB_PATH)"; rm -r $(UTILITIES_PATH)/embedXcode_prepare; fi;
+		@if [ -f $(UTILITIES_PATH)/embedXcode_prepare ]; then echo "." ; $(UTILITIES_PATH)/embedXcode_prepare $(SCOPE_FLAG) "$(USER_LIB_PATH)"; rm -r $(UTILITIES_PATH)/embedXcode_prepare; fi;
 
 
 $(OBJDIR):
