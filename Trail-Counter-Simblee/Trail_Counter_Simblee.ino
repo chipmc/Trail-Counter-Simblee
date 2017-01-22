@@ -100,9 +100,9 @@
 #define HOURLYBATTOFFSET 6
 // Finally, here are the variables I want to change often and pull them all together here
 #define DEVICENAME "Umstead"
-#define SERVICENAME "Dev"
+#define SERVICENAME "Rte40"
 #define SOFTWARERELEASENUMBER "1.3.6"
-#define PARKCLOSES 20
+#define PARKCLOSES 19
 #define PARKOPENS 7
 
 
@@ -589,7 +589,7 @@ void ui_event(event_t &event)   // This is where we define the actions to occur 
 
 void createCurrentScreen() // This is the screen that displays current status information
 {
-    char IDBuffer[32];   // Should be enough for 16 chars of service and name, version and text
+    char IDBuffer[34];   // Should be enough for 16 chars of service and name, version and text
     
     SimbleeForMobile.beginScreen(WHITE, PORTRAIT); // Sets orientation
     ui_menuBar = SimbleeForMobile.drawSegment(20, 70, 280, titles, countof(titles));
@@ -609,7 +609,7 @@ void createCurrentScreen() // This is the screen that displays current status in
     ui_adminAccessField = SimbleeForMobile.drawTextField(132,285,80,adminAccessInput);
     //ui_sendCloudSwitch = SimbleeForMobile.drawButton(70,400,150,"Send to Cloud");
     //SimbleeForMobile.setEvents(ui_sendCloudSwitch,EVENT_PRESS);
-    snprintf(IDBuffer, 33,"%s - %s at version: %s",DEVICENAME,SERVICENAME,SOFTWARERELEASENUMBER);   // Identifies Device on Current screen
+    snprintf(IDBuffer, 35,"%s - %s at version: %s",DEVICENAME,SERVICENAME,SOFTWARERELEASENUMBER);   // Identifies Device on Current screen
     SimbleeForMobile.drawText(10,(SimbleeForMobile.screenHeight-20),IDBuffer);
     SimbleeForMobile.endScreen();
 }
